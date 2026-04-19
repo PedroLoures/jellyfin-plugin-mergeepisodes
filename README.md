@@ -22,7 +22,7 @@ Show Name S00E02 Test - 1080p or ShowName S01E01 Test - 1080p
 
 
 ## From Repository
-1. In jellyfin, go to dashboard -> plugins -> Repositories -> add and paste this link https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/master/manifest.json
+1. In jellyfin, go to dashboard -> plugins -> Repositories -> add and paste this link https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/main/manifest.json
 2. Go to Catalog and search for the plugin you want to install
 3. Click on it and install
 4. Restart Jellyfin
