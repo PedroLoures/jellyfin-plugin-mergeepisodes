@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34714.143
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Jellyfin.Plugin.MergeVersions", "Jellyfin.Plugin.MergeVersions\Jellyfin.Plugin.MergeVersions.csproj", "{A6C0029B-F304-4577-92D3-32153DCE1FDC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Jellyfin.Plugin.MergeEpisodes", "Jellyfin.Plugin.MergeEpisodes\Jellyfin.Plugin.MergeEpisodes.csproj", "{A6C0029B-F304-4577-92D3-32153DCE1FDC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jellyfin.Plugin.MergeVersions.Tests", "Jellyfin.Plugin.MergeVersions.Tests\Jellyfin.Plugin.MergeVersions.Tests.csproj", "{28F04FAB-1A92-48B8-B9C2-E392732E0620}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jellyfin.Plugin.MergeEpisodes.Tests", "Jellyfin.Plugin.MergeEpisodes.Tests\Jellyfin.Plugin.MergeEpisodes.Tests.csproj", "{28F04FAB-1A92-48B8-B9C2-E392732E0620}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

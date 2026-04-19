@@ -2,7 +2,7 @@ using System;
 using MediaBrowser.Controller.Entities.TV;
 using Xunit;
 
-namespace Jellyfin.Plugin.MergeVersions.Tests
+namespace Jellyfin.Plugin.MergeEpisodes.Tests
 {
     public class EpisodeIdentityTests
     {
@@ -24,7 +24,7 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
         public void StandardEpisode_ExtractsIdentity(string path, string expected)
         {
             var episode = CreateEpisode(path);
-            var result = MergeVersionsManager.GetEpisodeBaseIdentity(episode);
+            var result = MergeEpisodesManager.GetEpisodeBaseIdentity(episode);
             Assert.Equal(expected, result);
         }
 
@@ -38,7 +38,7 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
         public void MultiEpisode_ExtractsFullIdentity(string path, string expected)
         {
             var episode = CreateEpisode(path);
-            var result = MergeVersionsManager.GetEpisodeBaseIdentity(episode);
+            var result = MergeEpisodesManager.GetEpisodeBaseIdentity(episode);
             Assert.Equal(expected, result);
         }
 
@@ -53,8 +53,8 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
             var ep1 = CreateEpisode(path1);
             var ep2 = CreateEpisode(path2);
 
-            var id1 = MergeVersionsManager.GetEpisodeBaseIdentity(ep1);
-            var id2 = MergeVersionsManager.GetEpisodeBaseIdentity(ep2);
+            var id1 = MergeEpisodesManager.GetEpisodeBaseIdentity(ep1);
+            var id2 = MergeEpisodesManager.GetEpisodeBaseIdentity(ep2);
 
             Assert.NotNull(id1);
             Assert.Equal(id1, id2, StringComparer.OrdinalIgnoreCase);
@@ -67,8 +67,8 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
             var ep1 = CreateEpisode(path1);
             var ep2 = CreateEpisode(path2);
 
-            var id1 = MergeVersionsManager.GetEpisodeBaseIdentity(ep1);
-            var id2 = MergeVersionsManager.GetEpisodeBaseIdentity(ep2);
+            var id1 = MergeEpisodesManager.GetEpisodeBaseIdentity(ep1);
+            var id2 = MergeEpisodesManager.GetEpisodeBaseIdentity(ep2);
 
             Assert.NotNull(id1);
             Assert.NotNull(id2);
@@ -82,7 +82,7 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
         public void NoSxxExx_ReturnsNull(string path)
         {
             var episode = CreateEpisode(path);
-            var result = MergeVersionsManager.GetEpisodeBaseIdentity(episode);
+            var result = MergeEpisodesManager.GetEpisodeBaseIdentity(episode);
             Assert.Null(result);
         }
 
@@ -92,8 +92,8 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
             var ep1 = CreateEpisode("/tv/Show s01e05 - 720p.mkv");
             var ep2 = CreateEpisode("/tv/Show S01E05 - 1080p.mkv");
 
-            var id1 = MergeVersionsManager.GetEpisodeBaseIdentity(ep1);
-            var id2 = MergeVersionsManager.GetEpisodeBaseIdentity(ep2);
+            var id1 = MergeEpisodesManager.GetEpisodeBaseIdentity(ep1);
+            var id2 = MergeEpisodesManager.GetEpisodeBaseIdentity(ep2);
 
             Assert.NotNull(id1);
             Assert.NotNull(id2);

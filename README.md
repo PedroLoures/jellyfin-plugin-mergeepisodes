@@ -1,8 +1,8 @@
-<h1 align="center">Jellyfin Merge Versions Plugin</h1>
+<h1 align="center">Jellyfin Merge Episodes Plugin</h1>
 <h3 align="center">Part of the <a href="https://jellyfin.org">Jellyfin Project</a></h3>
 
 <p align="center">
-Jellyfin Merge Versions plugin is a plugin that automatically groups every repeated and episode.
+Jellyfin Merge Episodes plugin is a plugin that automatically groups every repeated and episode.
 
 This is a simplified rewritten version of [Merge Versions](https://github.com/danieladov/jellyfin-plugin-mergeversions) from danieladov.
 

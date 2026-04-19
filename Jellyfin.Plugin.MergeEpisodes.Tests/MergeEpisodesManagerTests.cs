@@ -13,19 +13,19 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
-namespace Jellyfin.Plugin.MergeVersions.Tests
+namespace Jellyfin.Plugin.MergeEpisodes.Tests
 {
-    public class MergeVersionsManagerTests
+    public class MergeEpisodesManagerTests
     {
         private readonly Mock<ILibraryManager> _libraryManager;
-        private readonly Mock<ILogger<MergeVersionsManager>> _logger;
+        private readonly Mock<ILogger<MergeEpisodesManager>> _logger;
         private readonly Mock<IFileSystem> _fileSystem;
-        private readonly MergeVersionsManager _manager;
+        private readonly MergeEpisodesManager _manager;
 
-        public MergeVersionsManagerTests()
+        public MergeEpisodesManagerTests()
         {
             _libraryManager = new Mock<ILibraryManager>();
-            _logger = new Mock<ILogger<MergeVersionsManager>>();
+            _logger = new Mock<ILogger<MergeEpisodesManager>>();
             _fileSystem = new Mock<IFileSystem>();
 
             // Plugin.Instance is required by IsInExcludedLibrary — we need to set it up.
@@ -33,7 +33,7 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
             // IServerApplicationPaths + IXmlSerializer. We'll use a helper to bypass this.
             EnsurePluginInstance();
 
-            _manager = new MergeVersionsManager(
+            _manager = new MergeEpisodesManager(
                 _libraryManager.Object,
                 _logger.Object,
                 _fileSystem.Object
@@ -135,7 +135,7 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
             var ep2 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 1080p.mkv");
             SetupLibraryReturns(ep1, ep2);
 
-            // GetItemById returns Video for MergeVersions inner call
+            // GetItemById returns Video for MergeEpisodes inner call
             _libraryManager
                 .Setup(l => l.GetItemById<BaseItem>(It.IsAny<Guid>(), null))
                 .Returns((Guid id, object? _) =>
@@ -194,7 +194,7 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
             _ = Task.Run(async () =>
             {
                 await Task.Delay(10);
-                MergeVersionsManager.CancelRunningOperation();
+                MergeEpisodesManager.CancelRunningOperation();
             });
 
             // This may or may not throw depending on timing — either outcome is valid.
@@ -213,7 +213,7 @@ namespace Jellyfin.Plugin.MergeVersions.Tests
         public void CancelRunningOperation_WithNoActiveOperation_DoesNotThrow()
         {
             // Should be safe to call even when nothing is running
-            var ex = Record.Exception(() => MergeVersionsManager.CancelRunningOperation());
+            var ex = Record.Exception(() => MergeEpisodesManager.CancelRunningOperation());
             Assert.Null(ex);
         }
 

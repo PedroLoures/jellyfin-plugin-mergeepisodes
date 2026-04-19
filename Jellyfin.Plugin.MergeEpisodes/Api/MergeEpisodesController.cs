@@ -8,30 +8,30 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace Jellyfin.Plugin.MergeVersions.Api
+namespace Jellyfin.Plugin.MergeEpisodes.Api
 {
     /// <summary>
-    /// The Merge Versions api controller.
+    /// The Merge Episodes api controller.
     /// </summary>
     [ApiController]
     [Authorize(Policy = "RequiresElevation")]
-    [Route("MergeVersions")]
+    [Route("MergeEpisodes")]
     [Produces(MediaTypeNames.Application.Json)]
-    public class MergeVersionsController : ControllerBase
+    public class MergeEpisodesController : ControllerBase
     {
-        private readonly MergeVersionsManager _mergeVersionsManager;
-        private readonly ILogger<MergeVersionsManager> _logger;
+        private readonly MergeEpisodesManager _mergeEpisodesManager;
+        private readonly ILogger<MergeEpisodesManager> _logger;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="MergeVersionsController"/>.
+        /// Initializes a new instance of <see cref="MergeEpisodesController"/>.
         /// </summary>
-        public MergeVersionsController(
+        public MergeEpisodesController(
             ILibraryManager libraryManager,
-            ILogger<MergeVersionsManager> logger,
+            ILogger<MergeEpisodesManager> logger,
             IFileSystem fileSystem
         )
         {
-            _mergeVersionsManager = new MergeVersionsManager(libraryManager, logger, fileSystem);
+            _mergeEpisodesManager = new MergeEpisodesManager(libraryManager, logger, fileSystem);
             _logger = logger;
         }
 
@@ -47,7 +47,7 @@ namespace Jellyfin.Plugin.MergeVersions.Api
             _logger.LogInformation("Starting a manual refresh, looking up for repeated versions");
             try
             {
-                var result = await _mergeVersionsManager.MergeEpisodesAsync(null);
+                var result = await _mergeEpisodesManager.MergeEpisodesAsync(null);
                 _logger.LogInformation("Completed refresh");
                 return Ok(result);
             }
@@ -70,7 +70,7 @@ namespace Jellyfin.Plugin.MergeVersions.Api
             _logger.LogInformation("Splitting all episodes");
             try
             {
-                var result = await _mergeVersionsManager.SplitEpisodesAsync(null);
+                var result = await _mergeEpisodesManager.SplitEpisodesAsync(null);
                 _logger.LogInformation("Completed");
                 return Ok(result);
             }
@@ -94,7 +94,7 @@ namespace Jellyfin.Plugin.MergeVersions.Api
             _logger.LogInformation("Deep clean: splitting all episodes with any merge state");
             try
             {
-                var result = await _mergeVersionsManager.SplitAllEpisodesAsync(null);
+                var result = await _mergeEpisodesManager.SplitAllEpisodesAsync(null);
                 _logger.LogInformation("Deep clean completed");
                 return Ok(result);
             }
@@ -115,7 +115,7 @@ namespace Jellyfin.Plugin.MergeVersions.Api
         public ActionResult CancelOperation()
         {
             _logger.LogInformation("Cancellation requested for running operation");
-            MergeVersionsManager.CancelRunningOperation();
+            MergeEpisodesManager.CancelRunningOperation();
             return NoContent();
         }
     }

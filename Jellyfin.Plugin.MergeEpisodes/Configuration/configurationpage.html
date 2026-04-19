@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Merge Episodes</title>
+</head>
+
+<body>
+    <div data-role="page" class="page type-interior pluginConfigurationPage mergeEpisodesConfigurationPage"
+        data-require="emby-input,emby-button">
+        <div data-role="content">
+            <div class="content-primary">
+                <form class="mergeEpisodesConfigurationPage">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">Merge Episodes</h2>
+                        <a is="emby-linkbutton" class="raised button-alt headerHelpButton emby-button" target="_blank"
+                            href="https://github.com/PedroLoures/jellyfin-plugin-mergeepisodes">Help</a>
+                    </div>
+                    <div class="verticalSection">
+                        <p>This plugin merges repeated episodes that share the same
+                            SxxExx identifier into a single entry with multiple versions.</p>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="checkboxListLabel">Select paths to exclude from merging:</h3>
+                        <div id="divLocations" class="paperList checkboxList checkboxList-paperList">
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <button is="emby-button" type="button" class="raised button-submit block emby-button"
+                            id="btn-save" onclick=save()><span>Save</span></button>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Operations</h3>
+                        <div style="display:flex; flex-wrap:wrap; gap:.5em; margin-bottom:.5em">
+                            <button is="emby-button" type="button" class="raised emby-button"
+                                id="btn-merge-episodes" onclick=mergeEpisodes()><span>Merge All Episodes</span></button>
+                            <button is="emby-button" type="button" class="raised emby-button"
+                                id="btn-split-episodes" onclick=splitEpisodes()><span>Split All Episodes</span></button>
+                            <button is="emby-button" type="button" class="raised emby-button"
+                                id="btn-stop" onclick=stopOperation() disabled
+                                style="background:#c25;color:#fff"><span>Stop</span></button>
+                        </div>
+                        <button is="emby-button" type="button" class="raised block emby-button"
+                            id="btn-split-all" onclick=splitAllEpisodes()
+                            style="background:#d32f2f;color:#fff"><span>&#9888; Split Everything &mdash; Fix Old Plugin Issues</span></button>
+                    </div>
+
+                    <div id="progress-panel" style="display:none; margin-top:1em; padding:1em; border:1px solid #555; border-radius:4px;">
+                        <div style="display:flex; align-items:center; gap:.6em">
+                            <span id="progress-spinner" style="display:inline-block; width:1.1em; height:1.1em; border:2px solid rgba(255,255,255,.2); border-top-color:#00a4dc; border-radius:50%; animation:me-spin .8s linear infinite"></span>
+                            <span id="progress-label" style="font-weight:600"></span>
+                            <span id="progress-elapsed" style="margin-left:auto; opacity:.7; font-size:.9em"></span>
+                        </div>
+                    </div>
+
+                    <div id="operation-result" style="display:none; margin-top:1em; padding:1em; border-radius:4px;">
+                        <h3 id="result-title" style="margin:0 0 .4em 0"></h3>
+                        <p id="result-summary" style="margin:0 0 .4em 0"></p>
+                        <div id="result-failures" style="display:none">
+                            <p style="margin:.5em 0 .3em 0"><strong>Failed items:</strong></p>
+                            <ul id="result-failure-list" style="margin:0; padding-left:1.5em"></ul>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection" style="margin-top:1.5em">
+                        <div style="display:flex; align-items:center; justify-content:space-between">
+                            <h3 class="sectionTitle" style="margin:0">Activity Log</h3>
+                            <button is="emby-button" type="button" class="emby-button" id="btn-clear-log"
+                                onclick=clearLog() style="font-size:.8em; padding:.2em .6em; opacity:.7">Clear</button>
+                        </div>
+                        <div id="activity-log"
+                            style="margin-top:.5em; padding:.6em; border:1px solid #333; border-radius:4px; max-height:14em; overflow-y:auto; font-family:monospace; font-size:.85em; background:rgba(0,0,0,.15)">
+                            <span style="opacity:.5">No activity yet.</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <style>
+            @keyframes me-spin { to { transform: rotate(360deg); } }
+            #operation-result.me-success { border: 1px solid #4caf50; background: rgba(76,175,80,.1); }
+            #operation-result.me-failure { border: 1px solid #f44336; background: rgba(244,67,54,.1); }
+            #operation-result.me-cancelled { border: 1px solid #ff9800; background: rgba(255,152,0,.1); }
+            #activity-log .me-log-entry { padding: .15em 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+            #activity-log .me-ts { opacity: .5; margin-right: .5em; }
+            #activity-log .me-ok { color: #4caf50; }
+            #activity-log .me-warn { color: #ff9800; }
+            #activity-log .me-err { color: #f44336; }
+        </style>
+
+        <script type="text/javascript">
+            var pluginId = "f21bbed8-3a97-4d8b-88b2-48aaa65427cb";
+            var isRunning = false;
+            var elapsedTimer = null;
+            var operationStart = null;
+
+            function ts() {
+                return new Date().toLocaleTimeString();
+            }
+
+            function logEntry(message, cls) {
+                var log = document.querySelector('#activity-log');
+                if (log.querySelector('span')) {
+                    log.innerHTML = '';
+                }
+                var entry = document.createElement('div');
+                entry.className = 'me-log-entry';
+                entry.innerHTML = '<span class="me-ts">[' + ts() + ']</span><span class="' + (cls || '') + '">' + message + '</span>';
+                log.appendChild(entry);
+                log.scrollTop = log.scrollHeight;
+            }
+
+            function clearLog() {
+                document.querySelector('#activity-log').innerHTML = '<span style="opacity:.5">No activity yet.</span>';
+            }
+
+            function formatElapsed(ms) {
+                var secs = Math.floor(ms / 1000);
+                var mins = Math.floor(secs / 60);
+                secs = secs % 60;
+                return (mins > 0 ? mins + 'm ' : '') + secs + 's';
+            }
+
+            function startElapsedTimer() {
+                operationStart = Date.now();
+                var el = document.querySelector('#progress-elapsed');
+                el.textContent = '0s';
+                elapsedTimer = setInterval(function () {
+                    el.textContent = formatElapsed(Date.now() - operationStart);
+                }, 1000);
+            }
+
+            function stopElapsedTimer() {
+                if (elapsedTimer) {
+                    clearInterval(elapsedTimer);
+                    elapsedTimer = null;
+                }
+                return operationStart ? formatElapsed(Date.now() - operationStart) : '';
+            }
+
+            function setRunning(running, operationName) {
+                isRunning = running;
+                document.querySelector('#btn-merge-episodes').disabled = running;
+                document.querySelector('#btn-split-episodes').disabled = running;
+                document.querySelector('#btn-split-all').disabled = running;
+                document.querySelector('#btn-save').disabled = running;
+                document.querySelector('#btn-stop').disabled = !running;
+
+                var panel = document.querySelector('#progress-panel');
+                if (running) {
+                    document.querySelector('#progress-label').textContent = operationName + ' in progress\u2026';
+                    panel.style.display = 'block';
+                    document.querySelector('#operation-result').style.display = 'none';
+                    startElapsedTimer();
+                } else {
+                    panel.style.display = 'none';
+                    stopElapsedTimer();
+                }
+            }
+
+            function showResult(title, data, elapsed) {
+                var container = document.querySelector('#operation-result');
+                container.className = '';
+                document.querySelector('#result-title').textContent = title;
+
+                if (data.cancelled) {
+                    container.classList.add('me-cancelled');
+                    document.querySelector('#result-summary').textContent = 'Operation was cancelled.' + (elapsed ? ' (' + elapsed + ')' : '');
+                    document.querySelector('#result-failures').style.display = 'none';
+                } else {
+                    var hasFailures = data.Failed > 0;
+                    container.classList.add(hasFailures ? 'me-failure' : 'me-success');
+                    var summary = data.Succeeded + ' succeeded, ' + data.Failed + ' failed.';
+                    if (elapsed) {
+                        summary += ' (' + elapsed + ')';
+                    }
+                    document.querySelector('#result-summary').textContent = summary;
+
+                    var failDiv = document.querySelector('#result-failures');
+                    if (data.FailedItems && data.FailedItems.length > 0) {
+                        var list = document.querySelector('#result-failure-list');
+                        list.innerHTML = data.FailedItems.map(function (item) {
+                            return '<li>' + item + '</li>';
+                        }).join('');
+                        failDiv.style.display = 'block';
+                    } else {
+                        failDiv.style.display = 'none';
+                    }
+                }
+
+                container.style.display = 'block';
+            }
+
+            function runOperation(url, operationName) {
+                setRunning(true, operationName);
+                logEntry('Started: <strong>' + operationName + '</strong>');
+                ApiClient.fetch({ url: ApiClient.getUrl(url), type: 'POST' })
+                    .then(function (response) {
+                        return response.json();
+                    })
+                    .then(function (data) {
+                        var elapsed = stopElapsedTimer();
+                        setRunning(false);
+                        showResult(operationName, data, elapsed);
+                        if (data.cancelled) {
+                            logEntry(operationName + ' was <strong>cancelled</strong>.', 'me-warn');
+                        } else {
+                            var cls = data.Failed > 0 ? 'me-warn' : 'me-ok';
+                            logEntry(operationName + ' completed: <strong>' + data.Succeeded + '</strong> succeeded, <strong>' + data.Failed + '</strong> failed. (' + elapsed + ')', cls);
+                            if (data.FailedItems && data.FailedItems.length > 0) {
+                                data.FailedItems.forEach(function (item) {
+                                    logEntry('&nbsp;&nbsp;&#10007; ' + item, 'me-err');
+                                });
+                            }
+                        }
+                    })
+                    .catch(function () {
+                        var elapsed = stopElapsedTimer();
+                        setRunning(false);
+                        logEntry(operationName + ' failed with an unexpected error. (' + elapsed + ')', 'me-err');
+                        Dashboard.alert({ message: "Unexpected error occurred!" });
+                    });
+            }
+
+            function mergeEpisodes() {
+                runOperation('MergeEpisodes/MergeEpisodes', 'Merge Episodes');
+            }
+
+            function splitEpisodes() {
+                runOperation('MergeEpisodes/SplitEpisodes', 'Split Episodes');
+            }
+
+            function splitAllEpisodes() {
+                if (!confirm('This will split ALL episodes with any merge state, including secondary items. This is intended to fix issues from older plugin versions. Continue?')) {
+                    return;
+                }
+                runOperation('MergeEpisodes/SplitAllEpisodes', 'Split Everything (Deep Clean)');
+            }
+
+            function stopOperation() {
+                logEntry('Cancellation requested\u2026', 'me-warn');
+                var request = {
+                    url: ApiClient.getUrl('MergeEpisodes/Cancel'),
+                    type: 'POST'
+                };
+                ApiClient.fetch(request).then(function () {
+                    logEntry('Stop signal sent. Waiting for current item to finish\u2026', 'me-warn');
+                }).catch(function () {
+                    logEntry('Failed to send stop request.', 'me-err');
+                    Dashboard.alert({ message: "Failed to send stop request." });
+                });
+            }
+
+            ApiClient.getPluginConfiguration(pluginId).then(function (savedConfig) {
+                var config = savedConfig;
+
+                if (!config.LocationsExcluded) {
+                    config.LocationsExcluded = [];
+                }
+
+                ApiClient.getVirtualFolders().then(function (virtualFolders) {
+                    loadVirtualFolders(config, virtualFolders);
+                });
+            });
+
+            function loadVirtualFolders(config, virtualFolders) {
+                var html = '';
+                html += '<div data-role="controlgroup">';
+                for (var i = 0, length = virtualFolders.length; i < length; i++) {
+                    var virtualFolder = virtualFolders[i];
+                    html += getFolderHtml(config, virtualFolder, i);
+                }
+                html += '</div>';
+                document.querySelector('#divLocations').innerHTML = html;
+            }
+
+            function getFolderHtml(currentConfig, virtualFolder, index) {
+                var html = '';
+                for (var i = 0, length = virtualFolder.Locations.length; i < length; i++) {
+                    var id = 'chkFolder' + index + '_' + i;
+                    var location = virtualFolder.Locations[i];
+                    var isChecked = currentConfig.LocationsExcluded.some(function (current) {
+                        return current.toLowerCase() === location.toLowerCase();
+                    });
+                    var checkedAttribute = isChecked ? 'checked="checked"' : '';
+                    html += '<label><input is="emby-checkbox" class="chkLibrary" type="checkbox" data-mini="true" id="' + id + '" name="' + id + '" data-location="' + location + '" ' + checkedAttribute + ' /><span>' + location + ' - ' + virtualFolder.Name + '</span></label>';
+                }
+                return html;
+            }
+
+            function save() {
+                var checkboxes = document.querySelectorAll('.chkLibrary:checked');
+                var folders = Array.from(checkboxes).map(function (el) {
+                    return el.getAttribute('data-location');
+                });
+
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    config.LocationsExcluded = folders;
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (res) {
+                        Dashboard.processPluginConfigurationUpdateResult(res);
+                        logEntry('Configuration saved. ' + folders.length + ' path(s) excluded.', 'me-ok');
+                    });
+                });
+            }
+        </script>
+    </div>
+</body>
+
+</html>

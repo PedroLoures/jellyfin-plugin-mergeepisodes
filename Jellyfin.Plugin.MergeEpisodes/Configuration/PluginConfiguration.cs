@@ -1,7 +1,7 @@
 ﻿using MediaBrowser.Model.Plugins;
 using System;
 
-namespace Jellyfin.Plugin.MergeVersions.Configuration
+namespace Jellyfin.Plugin.MergeEpisodes.Configuration
 {
     public class PluginConfiguration : BasePluginConfiguration
     {

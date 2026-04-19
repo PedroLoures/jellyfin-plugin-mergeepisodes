@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using Jellyfin.Plugin.MergeVersions.Configuration;
+using Jellyfin.Plugin.MergeEpisodes.Configuration;
 using MediaBrowser.Controller;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using MediaBrowser.Common.Plugins;
 
-namespace Jellyfin.Plugin.MergeVersions
+namespace Jellyfin.Plugin.MergeEpisodes
 {
     public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages 
     {
@@ -16,12 +16,12 @@ namespace Jellyfin.Plugin.MergeVersions
             Instance = this;
         }
 
-        public override string Name => "Merge Versions";
+        public override string Name => "Merge Episodes";
 
         public static Plugin Instance { get; private set; }
 
         public override string Description
-            => "Merge Versions";
+            => "Merge Episodes";
 
         public PluginConfiguration PluginConfiguration => Configuration;
 
@@ -34,7 +34,7 @@ namespace Jellyfin.Plugin.MergeVersions
             {
                 new PluginPageInfo
                 {
-                    Name = "Merge Versions",
+                    Name = "Merge Episodes",
                     EmbeddedResourcePath = GetType().Namespace + ".Configuration.configurationpage.html"
                 }
             };

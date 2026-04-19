@@ -16,22 +16,22 @@ using System.Threading.Tasks;
 
 #nullable enable
 
-namespace Jellyfin.Plugin.MergeVersions
+namespace Jellyfin.Plugin.MergeEpisodes
 {
     public record OperationResult(int Succeeded, int Failed, List<string> FailedItems);
 
-    public class MergeVersionsManager
+    public class MergeEpisodesManager
     {
         private readonly ILibraryManager _libraryManager;
-        private readonly ILogger<MergeVersionsManager> _logger;
+        private readonly ILogger<MergeEpisodesManager> _logger;
         private readonly IFileSystem _fileSystem;
 
         private static readonly object _lock = new();
         private static CancellationTokenSource? _cts;
 
-        public MergeVersionsManager(
+        public MergeEpisodesManager(
             ILibraryManager libraryManager,
-            ILogger<MergeVersionsManager> logger,
+            ILogger<MergeEpisodesManager> logger,
             IFileSystem fileSystem
         )
         {
@@ -106,7 +106,7 @@ namespace Jellyfin.Plugin.MergeVersions
                 try
                 {
                     _logger.LogInformation("Merging {Key}", e.Key);
-                    await MergeVersions(e.Select(e => e.Id).ToList(), cancellationToken);
+                    await MergeEpisodeVersions(e.Select(e => e.Id).ToList(), cancellationToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -208,7 +208,7 @@ namespace Jellyfin.Plugin.MergeVersions
                 .ToList();
         }
 
-        private async Task MergeVersions(List<Guid> ids, CancellationToken cancellationToken)
+        private async Task MergeEpisodeVersions(List<Guid> ids, CancellationToken cancellationToken)
         {
             var items = ids.Select(i => _libraryManager.GetItemById<BaseItem>(i, null))
                 .OfType<Video>()
