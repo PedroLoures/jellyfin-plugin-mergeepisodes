@@ -16,13 +16,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Jellyfin.Plugin.MergeVersions.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Jellyfin.Common" Version="10.11.0" />
     <PackageReference Include="Jellyfin.Controller" Version="10.11.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Remove="Configuration\configurationpage.html" />
-    <EmbeddedResource Include="Configuration\configurationpage.html" />
-  </ItemGroup>
-
-</Project>
+  </Project>

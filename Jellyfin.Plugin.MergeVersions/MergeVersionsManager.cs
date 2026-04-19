@@ -1,30 +1,33 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Globalization;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+
+#nullable enable
 
 namespace Jellyfin.Plugin.MergeVersions
 {
-    public class MergeVersionsManager : IDisposable
+    public record OperationResult(int Succeeded, int Failed, List<string> FailedItems);
+
+    public class MergeVersionsManager
     {
         private readonly ILibraryManager _libraryManager;
-        private readonly Timer _timer;
-        private readonly ILogger<MergeVersionsManager> _logger; // TODO logging
-        private readonly SessionInfo _session;
+        private readonly ILogger<MergeVersionsManager> _logger;
         private readonly IFileSystem _fileSystem;
+
+        private static readonly object _lock = new();
+        private static CancellationTokenSource? _cts;
 
         public MergeVersionsManager(
             ILibraryManager libraryManager,
@@ -35,118 +38,158 @@ namespace Jellyfin.Plugin.MergeVersions
             _libraryManager = libraryManager;
             _logger = logger;
             _fileSystem = fileSystem;
-            _timer = new Timer(_ => OnTimerElapsed(), null, Timeout.Infinite, Timeout.Infinite);
         }
 
-        public void MergeMovies(IProgress<double> progress)
+        /// <summary>
+        /// Cancels any currently running merge or split operation.
+        /// </summary>
+        public static void CancelRunningOperation()
         {
-            _logger.LogInformation("Scanning for repeated movies");
-
-            var duplicateMovies = GetMoviesFromLibrary()
-                .GroupBy(x => x.ProviderIds["Tmdb"])
-                .Where(group => group.Count() > 1 &&
-                group.Any(movie => movie.PrimaryVersionId == null &&
-                                    !movie.LinkedAlternateVersions.Any()))
-                .ToList();
-
-            var current = 0;
-            Parallel.ForEach(
-                duplicateMovies,
-                async m =>
-                {
-                    current++;
-                    var percent = current / (double)duplicateMovies.Count * 100;
-                    progress?.Report((int)percent);
-                    _logger.LogInformation(
-                        $"Merging {m.ElementAt(0).Name} ({m.ElementAt(0).ProductionYear})"
-                    );
-                    await MergeVersions(m.Select(e => e.Id).ToList());
-                }
-            );
-            progress?.Report(100);
+            lock (_lock)
+            {
+                _cts?.Cancel();
+            }
         }
 
-        public void SplitMovies(IProgress<double> progress)
+        private static CancellationToken BeginOperation()
         {
-            var movies = GetMoviesFromLibrary();
-            var current = 0;
-            Parallel.ForEach(
-                movies,
-                async m =>
-                {
-                    current++;
-                    var percent = current / (double)movies.Count * 100;
-                    progress?.Report((int)percent);
-
-                    _logger.LogInformation($"Spliting {m.Name} ({m.ProductionYear})");
-                    await DeleteAlternateSources(m.Id);
-                }
-            );
-            progress?.Report(100);
+            lock (_lock)
+            {
+                _cts?.Cancel();
+                _cts?.Dispose();
+                _cts = new CancellationTokenSource();
+                return _cts.Token;
+            }
         }
 
-        public async Task MergeEpisodesAsync(IProgress<double> progress)
+        // Captures everything up through the SxxExx identifier (supporting multi-digit
+        // season/episode and multi-episode variants like E01E02, E01n02, E01-E02, etc.)
+        // Stops before the first space or dot that follows, so quality tags are excluded.
+        private static readonly Regex EpisodeIdentityRegex =
+    new(@"^(.+?S\d+E\d+(?:(?:E|-E|n)\d+)*)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        internal static string? GetEpisodeBaseIdentity(Episode episode)
         {
+            var fileName = Path.GetFileNameWithoutExtension(episode.Path);
+            if (fileName is null)
+            {
+                return null;
+            }
+
+            var match = EpisodeIdentityRegex.Match(fileName);
+            return match.Success
+                ? match.Groups[1].Value.Trim()
+                : null;
+        }
+
+        public async Task<OperationResult> MergeEpisodesAsync(IProgress<double>? progress)
+        {
+            var cancellationToken = BeginOperation();
             _logger.LogInformation("Scanning for repeated episodes");
 
             var duplicateEpisodes = GetEpisodesFromLibrary()
-                .GroupBy(x => new
-                {
-                    x.SeriesName,
-                    x.SeasonName,
-                    x.Name,
-                    x.IndexNumber,
-                    x.ProductionYear
-                })
-                .Where(x => x.Count() > 1)
+                .GroupBy(e => GetEpisodeBaseIdentity(e), StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Key is not null && g.Count() > 1)
                 .ToList();
 
+            _logger.LogInformation("Found {Count} episode groups to merge", duplicateEpisodes.Count);
+
             var current = 0;
+            var failedItems = new List<string>();
             foreach (var e in duplicateEpisodes)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 current++;
                 var percent = current / (double)duplicateEpisodes.Count * 100;
                 progress?.Report((int)percent);
-                _logger.LogInformation(
-                    $"Merging {e.ElementAt(0).Name} ({e.ElementAt(0).ProductionYear})"
-                );
-                await MergeVersions(e.Select(e => e.Id).ToList());
+
+                try
+                {
+                    _logger.LogInformation("Merging {Key}", e.Key);
+                    await MergeVersions(e.Select(e => e.Id).ToList(), cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    failedItems.Add(e.Key!);
+                    _logger.LogError(ex, "Failed to merge {Key}", e.Key);
+                }
             }
+
+            var succeeded = current - failedItems.Count;
+            _logger.LogInformation("Merge complete: {Succeeded} succeeded, {Failed} failed",
+                succeeded, failedItems.Count);
             progress?.Report(100);
+            return new OperationResult(succeeded, failedItems.Count, failedItems);
         }
 
-        public async Task SplitEpisodesAsync(IProgress<double> progress)
+        // NOTE: The LinkedAlternateVersions/PrimaryVersionId filtering in SplitEpisodesAsync
+        // and SplitAllEpisodesAsync cannot be unit tested because Video.LinkedAlternateVersions
+        // is non-virtual and its backing field is managed internally by Jellyfin.
+        // These code paths must be verified manually against a running Jellyfin instance.
+        public async Task<OperationResult> SplitEpisodesAsync(IProgress<double>? progress)
         {
-            var episodes = GetEpisodesFromLibrary();
+            var cancellationToken = BeginOperation();
+
+            // Only target primary versions — splitting a primary already unlinks all its alternates,
+            // so processing secondary items would be redundant lookups.
+            var primaryEpisodes = GetEpisodesFromLibrary()
+                .Where(e => e.LinkedAlternateVersions.Length > 0)
+                .ToList();
+
+            _logger.LogInformation("Found {Count} merged episodes to split", primaryEpisodes.Count);
+
+            return await SplitEpisodeList(primaryEpisodes, progress, cancellationToken);
+        }
+
+        /// <summary>
+        /// Splits ALL episodes that have any merge state (primary or secondary),
+        /// intended as a deep clean to fix issues left by older plugin versions.
+        /// </summary>
+        public async Task<OperationResult> SplitAllEpisodesAsync(IProgress<double>? progress)
+        {
+            var cancellationToken = BeginOperation();
+
+            var allMergedEpisodes = GetEpisodesFromLibrary()
+                .Where(e => e.LinkedAlternateVersions.Length > 0 || e.PrimaryVersionId != null)
+                .ToList();
+
+            _logger.LogInformation("Found {Count} episodes with merge state to split (deep clean)", allMergedEpisodes.Count);
+
+            return await SplitEpisodeList(allMergedEpisodes, progress, cancellationToken);
+        }
+
+        private async Task<OperationResult> SplitEpisodeList(
+            List<Episode> episodes,
+            IProgress<double>? progress,
+            CancellationToken cancellationToken)
+        {
             var current = 0;
+            var failedItems = new List<string>();
 
             foreach (var e in episodes)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 current++;
                 var percent = current / (double)episodes.Count * 100;
                 progress?.Report((int)percent);
 
-                _logger.LogInformation($"Spliting {e.IndexNumber} ({e.SeriesName})");
-                await DeleteAlternateSources(e.Id);
+                try
+                {
+                    _logger.LogInformation("Splitting {Name} ({SeriesName})", e.Name, e.SeriesName);
+                    await DeleteAlternateSources(e.Id, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    failedItems.Add($"{e.SeriesName} - {e.Name}");
+                    _logger.LogError(ex, "Failed to split {Name} ({SeriesName})", e.Name, e.SeriesName);
+                }
             }
-            progress?.Report(100);
-        }
 
-        private List<Movie> GetMoviesFromLibrary()
-        {
-            return _libraryManager
-                    .GetItemList(
-                        new InternalItemsQuery
-                        {
-                            IncludeItemTypes = [BaseItemKind.Movie],
-                            IsVirtualItem = false,
-                            Recursive = true,
-                        }
-                )
-                .Select(m => m as Movie)
-                .Where(m => m.ProviderIds.ContainsKey("Tmdb"))
-                .Where(IsEligible)
-                .ToList();
+            var succeeded = current - failedItems.Count;
+            _logger.LogInformation("Split complete: {Succeeded} succeeded, {Failed} failed",
+                succeeded, failedItems.Count);
+            progress?.Report(100);
+            return new OperationResult(succeeded, failedItems.Count, failedItems);
         }
 
         private List<Episode> GetEpisodesFromLibrary()
@@ -160,12 +203,12 @@ namespace Jellyfin.Plugin.MergeVersions
                         Recursive = true,
                     }
                 )
-                .Select(m => m as Episode)
+                .OfType<Episode>()
                 .Where(IsEligible)
                 .ToList();
         }
 
-        private async Task MergeVersions(List<Guid> ids)
+        private async Task MergeVersions(List<Guid> ids, CancellationToken cancellationToken)
         {
             var items = ids.Select(i => _libraryManager.GetItemById<BaseItem>(i, null))
                 .OfType<Video>()
@@ -200,30 +243,45 @@ namespace Jellyfin.Plugin.MergeVersions
                 .LinkedAlternateVersions.Where(l => items.Any(i => i.Path == l.Path))
                 .ToList();
 
-            var alternateVersionsChanged = false;
-            foreach (var item in items.Where(i =>
+            var knownPaths = new HashSet<string>(
+                alternateVersionsOfPrimary.Select(l => l.Path),
+                StringComparer.OrdinalIgnoreCase);
+
+            var itemsToLink = items.Where(i =>
                 !i.Id.Equals(primaryVersion.Id) &&
-                !alternateVersionsOfPrimary.Any(l => l.ItemId == i.Id)))
+                !alternateVersionsOfPrimary.Any(l => l.ItemId == i.Id)).ToList();
+
+            if (itemsToLink.Count == 0)
             {
+                return;
+            }
+
+            foreach (var item in itemsToLink)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 item.SetPrimaryVersionId(
                     primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture)
                 );
 
                 await item.UpdateToRepositoryAsync(
                         ItemUpdateType.MetadataEdit,
-                        CancellationToken.None
+                        cancellationToken
                     )
                     .ConfigureAwait(false);
 
-                // TODO: due to check in foreach it can't be an alternate version yet?
-                AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
-                                                new LinkedChild { Path = item.Path,
-                                                                  ItemId = item.Id });
+                if (knownPaths.Add(item.Path))
+                {
+                    alternateVersionsOfPrimary.Add(
+                        new LinkedChild { Path = item.Path, ItemId = item.Id });
+                }
 
                 foreach (var linkedItem in item.LinkedAlternateVersions)
                 {
-                    AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
-                                                    linkedItem);
+                    if (knownPaths.Add(linkedItem.Path))
+                    {
+                        alternateVersionsOfPrimary.Add(linkedItem);
+                    }
                 }
 
                 if (item.LinkedAlternateVersions.Length > 0)
@@ -231,23 +289,19 @@ namespace Jellyfin.Plugin.MergeVersions
                     item.LinkedAlternateVersions = [];
                     await item.UpdateToRepositoryAsync(
                             ItemUpdateType.MetadataEdit,
-                            CancellationToken.None
+                            cancellationToken
                         )
                         .ConfigureAwait(false);
                 }
-                alternateVersionsChanged = true;
             }
 
-            if (alternateVersionsChanged)
-            {
-                primaryVersion.LinkedAlternateVersions = alternateVersionsOfPrimary.ToArray();
-                await primaryVersion
-                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
+            primaryVersion.LinkedAlternateVersions = alternateVersionsOfPrimary.ToArray();
+            await primaryVersion
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        private async Task DeleteAlternateSources(Guid itemId)
+        private async Task DeleteAlternateSources(Guid itemId, CancellationToken cancellationToken)
         {
             var item = _libraryManager.GetItemById<Video>(itemId);
             if (item is null)
@@ -257,7 +311,12 @@ namespace Jellyfin.Plugin.MergeVersions
 
             if (item.LinkedAlternateVersions.Length == 0 && item.PrimaryVersionId != null)
             {
-                item = _libraryManager.GetItemById<Video>(Guid.Parse(item.PrimaryVersionId));
+                if (!Guid.TryParse(item.PrimaryVersionId, out var primaryId))
+                {
+                    return;
+                }
+
+                item = _libraryManager.GetItemById<Video>(primaryId);
             }
 
             if (item is null)
@@ -267,29 +326,27 @@ namespace Jellyfin.Plugin.MergeVersions
 
             foreach (var link in item.GetLinkedAlternateVersions())
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 link.SetPrimaryVersionId(null);
                 link.LinkedAlternateVersions = [];
 
                 await link.UpdateToRepositoryAsync(
                         ItemUpdateType.MetadataEdit,
-                        CancellationToken.None
+                        cancellationToken
                     )
                     .ConfigureAwait(false);
             }
 
             item.LinkedAlternateVersions = [];
             item.SetPrimaryVersionId(null);
-            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken)
                 .ConfigureAwait(false);
         }
 
         private bool IsEligible(BaseItem item)
         {
-            if (IsInInactiveLibrary(item) || IsInExcludedLibrary(item))
-            {
-                return false;
-            }
-            return true;
+            return !IsInExcludedLibrary(item);
         }
 
         private bool IsInExcludedLibrary(BaseItem item)
@@ -297,56 +354,6 @@ namespace Jellyfin.Plugin.MergeVersions
            return Plugin.Instance.PluginConfiguration.LocationsExcluded != null
                   && Plugin.Instance.PluginConfiguration.LocationsExcluded
                     .Any(s => _fileSystem.ContainsSubPath(s, item.Path));
-        }
-
-        private bool IsInInactiveLibrary(BaseItem item)
-        {
-            if (item is not Movie)
-            {
-                return false;
-            }
-
-            var parentPath = item.DisplayParent?.Path;
-            if (string.IsNullOrWhiteSpace(parentPath))
-            {
-                return false;
-            }
-
-            var virtualFolders = _libraryManager.GetVirtualFolders();
-
-            return !virtualFolders
-                .SelectMany(vf => vf.Locations ?? Array.Empty<string>())
-                .Any(libPath => string.Equals(libPath, parentPath, StringComparison.OrdinalIgnoreCase) ||
-                                _fileSystem.ContainsSubPath(libPath, parentPath));
-        }
-        private void AddToAlternateVersionsIfNotPresent(List<LinkedChild> alternateVersions,
-                                                        LinkedChild newVersion)
-        {
-            if (!alternateVersions.Any(
-                i => string.Equals(i.Path,
-                                newVersion.Path,
-                                StringComparison.OrdinalIgnoreCase
-                            )))
-            {
-                alternateVersions.Add(newVersion);
-            }
-        }
-
-        private void OnTimerElapsed() { }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _timer?.Dispose();
-                _session?.DisposeAsync();
-            }
         }
     }
 }

@@ -1,5 +1,5 @@
+using System;
 using System.Net.Mime;
-using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.IO;
@@ -14,7 +14,7 @@ namespace Jellyfin.Plugin.MergeVersions.Api
     /// The Merge Versions api controller.
     /// </summary>
     [ApiController]
-    [Authorize]
+    [Authorize(Policy = "RequiresElevation")]
     [Route("MergeVersions")]
     [Produces(MediaTypeNames.Application.Json)]
     public class MergeVersionsController : ControllerBase
@@ -23,8 +23,8 @@ namespace Jellyfin.Plugin.MergeVersions.Api
         private readonly ILogger<MergeVersionsManager> _logger;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="TMDbBoxSetsController"/>.
-
+        /// Initializes a new instance of <see cref="MergeVersionsController"/>.
+        /// </summary>
         public MergeVersionsController(
             ILibraryManager libraryManager,
             ILogger<MergeVersionsManager> logger,
@@ -32,67 +32,90 @@ namespace Jellyfin.Plugin.MergeVersions.Api
         )
         {
             _mergeVersionsManager = new MergeVersionsManager(libraryManager, logger, fileSystem);
-
             _logger = logger;
         }
 
         /// <summary>
-        /// Scans all movies and merges repeated ones.
+        /// Scans all episodes and merges repeated ones.
         /// </summary>
-        /// <reponse code="204">Library scan and merge started successfully. </response>
-        /// <returns>A <see cref="NoContentResult"/> indicating success.</returns>
-        [HttpPost("MergeMovies")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public ActionResult MergeMoviesRequest()
-        {
-            _logger.LogInformation("Starting a manual refresh, looking up for repeated versions");
-            _mergeVersionsManager.MergeMovies(null);
-            _logger.LogInformation("Completed refresh");
-            return NoContent();
-        }
-
-        /// <summary>
-        /// Scans all movies and splits merged ones.
-        /// </summary>
-        /// <reponse code="204">Library scan and split started successfully. </response>
-        /// <returns>A <see cref="NoContentResult"/> indicating success.</returns>
-        [HttpPost("SplitMovies")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public ActionResult SplitMoviesRequest()
-        {
-            _logger.LogInformation("Spliting all movies");
-            _mergeVersionsManager.SplitMovies(null);
-            _logger.LogInformation("Completed");
-            return NoContent();
-        }
-
-        /// <summary>
-        /// Scans all episodes and merge repeated ones.
-        /// </summary>
-        /// <reponse code="204">Library scan and merge started successfully. </response>
-        /// <returns>A <see cref="NoContentResult"/> indicating success.</returns>
+        /// <response code="200">Merge completed. Returns operation result with counts and any failures.</response>
+        /// <returns>An <see cref="OperationResult"/> with succeeded/failed counts and failed item names.</returns>
         [HttpPost("MergeEpisodes")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<ActionResult> MergeEpisodesRequestAsync()
         {
             _logger.LogInformation("Starting a manual refresh, looking up for repeated versions");
-            await _mergeVersionsManager.MergeEpisodesAsync(null);
-            _logger.LogInformation("Completed refresh");
-            return NoContent();
+            try
+            {
+                var result = await _mergeVersionsManager.MergeEpisodesAsync(null);
+                _logger.LogInformation("Completed refresh");
+                return Ok(result);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Merge episodes operation was cancelled");
+                return Ok(new { message = "Operation cancelled", cancelled = true });
+            }
         }
 
         /// <summary>
-        /// Scans all episodes and splits merged ones.
+        /// Scans all episodes and splits merged ones (primary versions only).
         /// </summary>
-        /// <reponse code="204">Library scan and split started successfully. </response>
-        /// <returns>A <see cref="NoContentResult"/> indicating success.</returns>
+        /// <response code="200">Split completed. Returns operation result with counts and any failures.</response>
+        /// <returns>An <see cref="OperationResult"/> with succeeded/failed counts and failed item names.</returns>
         [HttpPost("SplitEpisodes")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<ActionResult> SplitEpisodesRequestAsync()
         {
-            _logger.LogInformation("Spliting all movies");
-            await _mergeVersionsManager.SplitEpisodesAsync(null);
-            _logger.LogInformation("Completed");
+            _logger.LogInformation("Splitting all episodes");
+            try
+            {
+                var result = await _mergeVersionsManager.SplitEpisodesAsync(null);
+                _logger.LogInformation("Completed");
+                return Ok(result);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Split episodes operation was cancelled");
+                return Ok(new { message = "Operation cancelled", cancelled = true });
+            }
+        }
+
+        /// <summary>
+        /// Splits ALL episodes with any merge state (primary or secondary).
+        /// Intended as a deep clean to fix issues left by older plugin versions.
+        /// </summary>
+        /// <response code="200">Split completed. Returns operation result with counts and any failures.</response>
+        /// <returns>An <see cref="OperationResult"/> with succeeded/failed counts and failed item names.</returns>
+        [HttpPost("SplitAllEpisodes")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<ActionResult> SplitAllEpisodesRequestAsync()
+        {
+            _logger.LogInformation("Deep clean: splitting all episodes with any merge state");
+            try
+            {
+                var result = await _mergeVersionsManager.SplitAllEpisodesAsync(null);
+                _logger.LogInformation("Deep clean completed");
+                return Ok(result);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Split all episodes operation was cancelled");
+                return Ok(new { message = "Operation cancelled", cancelled = true });
+            }
+        }
+
+        /// <summary>
+        /// Cancels any currently running merge or split operation.
+        /// </summary>
+        /// <response code="204">Cancellation requested successfully.</response>
+        /// <returns>A <see cref="NoContentResult"/> indicating the cancellation was requested.</returns>
+        [HttpPost("Cancel")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public ActionResult CancelOperation()
+        {
+            _logger.LogInformation("Cancellation requested for running operation");
+            MergeVersionsManager.CancelRunningOperation();
             return NoContent();
         }
     }
