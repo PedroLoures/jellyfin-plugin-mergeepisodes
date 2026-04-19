@@ -4,7 +4,7 @@
 <p align="center">
 Jellyfin Merge Versions plugin is a plugin that automatically groups every repeated and episode.
 
-This is a simplified version from danieladov.
+This is a simplified rewritten version of [Merge Versions](https://github.com/danieladov/jellyfin-plugin-mergeversions) from danieladov.
 
 Since movie is already done by Jellyfin, this does not do movies.
 This just follow the Show rules in the documentation as:
@@ -22,7 +22,7 @@ Show Name S00E02 Test - 1080p or ShowName S01E01 Test - 1080p
 
 
 ## From Repository
-1. In jellyfin, go to dashboard -> plugins -> Repositories -> add and paste this link https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json
+1. In jellyfin, go to dashboard -> plugins -> Repositories -> add and paste this link https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/master/manifest.json
 2. Go to Catalog and search for the plugin you want to install
 3. Click on it and install
 4. Restart Jellyfin
