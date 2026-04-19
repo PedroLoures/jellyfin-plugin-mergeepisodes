@@ -2,7 +2,19 @@
 <h3 align="center">Part of the <a href="https://jellyfin.org">Jellyfin Project</a></h3>
 
 <p align="center">
-Jellyfin Merge Versions plugin is a plugin that automatically groups every repeated movie and episode.
+Jellyfin Merge Versions plugin is a plugin that automatically groups every repeated and episode.
+
+This is a simplified version from danieladov.
+
+Since movie is already done by Jellyfin, this does not do movies.
+This just follow the Show rules in the documentation as:
+Show Name SXXEYY Episode Name - Tag1 - Tag2.extension
+
+The way it works is anything past SXX or SXXX up until the first space is counted for. So any files with the same name up until that point are considered equal.
+
+Show Name S00E01 Test - 1080p is the same as ShowName S00E01 - 720p
+But different from
+Show Name S00E02 Test - 1080p or ShowName S01E01 Test - 1080p
 
 </p>
 
