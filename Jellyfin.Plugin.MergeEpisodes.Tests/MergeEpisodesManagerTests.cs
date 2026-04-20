@@ -73,8 +73,6 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             _manager = new MergeEpisodesManager(
                 _libraryManager.Object,
                 _logger.Object,
-                _fileSystem.Object,
-                new ConfigurationService(),
                 new LibraryQueryService(
                     _libraryManager.Object,
                     _fileSystem.Object,
@@ -540,8 +538,6 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             var manager = new MergeEpisodesManager(
                 _libraryManager.Object,
                 _logger.Object,
-                _fileSystem.Object,
-                new ConfigurationService(),
                 new LibraryQueryService(
                     _libraryManager.Object,
                     _fileSystem.Object,

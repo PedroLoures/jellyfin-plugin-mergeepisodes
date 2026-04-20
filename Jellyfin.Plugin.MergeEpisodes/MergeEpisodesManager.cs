@@ -1,18 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.MergeEpisodes
@@ -32,8 +29,6 @@ namespace Jellyfin.Plugin.MergeEpisodes
         private readonly SemaphoreSlim _operationGuard = new(1, 1);
         private readonly ILibraryManager _libraryManager;
         private readonly ILogger<MergeEpisodesManager> _logger;
-        private readonly IFileSystem _fileSystem;
-        private readonly ConfigurationService _configService;
         private readonly LibraryQueryService _queryService;
 
         private CancellationTokenSource? _cts;
@@ -43,20 +38,14 @@ namespace Jellyfin.Plugin.MergeEpisodes
         /// </summary>
         /// <param name="libraryManager">The library manager.</param>
         /// <param name="logger">The logger.</param>
-        /// <param name="fileSystem">The file system.</param>
-        /// <param name="configService">The configuration service.</param>
         /// <param name="queryService">The library query service.</param>
         public MergeEpisodesManager(
             ILibraryManager libraryManager,
             ILogger<MergeEpisodesManager> logger,
-            IFileSystem fileSystem,
-            ConfigurationService configService,
             LibraryQueryService queryService)
         {
             _libraryManager = libraryManager;
             _logger = logger;
-            _fileSystem = fileSystem;
-            _configService = configService;
             _queryService = queryService;
         }
 
@@ -306,8 +295,12 @@ namespace Jellyfin.Plugin.MergeEpisodes
                     .First();
             }
 
+            var itemPaths = new HashSet<string>(
+                items.Select(i => i.Path).Where(p => p is not null)!,
+                StringComparer.OrdinalIgnoreCase);
+
             var alternateVersionsOfPrimary = primaryVersion
-                .LinkedAlternateVersions.Where(l => items.Any(i => i.Path == l.Path))
+                .LinkedAlternateVersions.Where(l => itemPaths.Contains(l.Path))
                 .ToList();
 
             var knownPaths = new HashSet<string>(
@@ -326,7 +319,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
             // Collect all new linked children and their existing sub-links
             foreach (var item in itemsToLink)
             {
-                if (knownPaths.Add(item.Path))
+                if (item.Path is not null && knownPaths.Add(item.Path))
                 {
                     alternateVersionsOfPrimary.Add(
                         new LinkedChild { Path = item.Path, ItemId = item.Id });
@@ -400,14 +393,23 @@ namespace Jellyfin.Plugin.MergeEpisodes
                 .ConfigureAwait(false);
 
             // STEP 2: Clear children's back-references.
+            // Each child is updated independently — a stale/deleted item must not
+            // prevent the remaining children from being cleaned up.
             foreach (var link in linkedItems)
             {
-                link.SetPrimaryVersionId(null);
-                link.LinkedAlternateVersions = [];
+                try
+                {
+                    link.SetPrimaryVersionId(null);
+                    link.LinkedAlternateVersions = [];
 
-                await link.UpdateToRepositoryAsync(
-                    ItemUpdateType.MetadataEdit,
-                    CancellationToken.None).ConfigureAwait(false);
+                    await link.UpdateToRepositoryAsync(
+                        ItemUpdateType.MetadataEdit,
+                        CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to clear merge state on linked item {Id}", link.Id);
+                }
             }
         }
     }

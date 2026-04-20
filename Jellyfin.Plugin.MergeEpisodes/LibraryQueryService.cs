@@ -82,6 +82,11 @@ namespace Jellyfin.Plugin.MergeEpisodes
         /// <returns>True if the item is in an excluded library; false otherwise.</returns>
         public bool IsInExcludedLibrary(BaseItem item)
         {
+            if (item.Path is null)
+            {
+                return false;
+            }
+
             var excluded = _configService.LocationsExcluded;
             return excluded.Count > 0
                    && excluded.Any(s => _fileSystem.ContainsSubPath(s, item.Path));
