@@ -412,11 +412,6 @@ namespace Jellyfin.Plugin.MergeEpisodes
                 item = primary;
             }
 
-            if (item is null)
-            {
-                return;
-            }
-
             // Capture linked items before clearing
             var linkedItems = item.GetLinkedAlternateVersions();
 

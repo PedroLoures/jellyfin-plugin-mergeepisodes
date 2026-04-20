@@ -27,11 +27,12 @@ jobs:
         id: version
         env:
           CSPROJ_PATH: Jellyfin.Plugin.MergeEpisodes/Jellyfin.Plugin.MergeEpisodes.csproj
-          MANUAL_VERSION: 0   # ← change this manually when you want to bump Z
+          MANUAL_VERSION: 1   # ← bump this when you want Z to change
+          RUN_OFFSET: 15       # ← when you bump MANUAL_VERSION, set this to the current run_number - 15 + 
         run: |
           # Read X.Y from Jellyfin.Controller version in .csproj
           ABI=$(grep -oP '(?<=Jellyfin\.Controller" Version=")[0-9]+\.[0-9]+' "$CSPROJ_PATH")
-          BUILD=${{ github.run_number }}
+          BUILD=$(( ${{ github.run_number }} - $RUN_OFFSET ))
           VERSION="$ABI.$MANUAL_VERSION.$BUILD"
           echo "New version: $VERSION"
 
