@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: write  # needed to create GitHub Releases
 
@@ -125,7 +127,7 @@ jobs:
           # Set this secret in your plugin repo:
           # Settings → Secrets → Actions → New repository secret
           # Name: JELLYFIN_MANIFEST_REPO_TOKEN
-          # Value: a GitHub PAT with repo scope on your manifest repo
+          # Value: a GitHub PAT with Contents read/write on the manifest repo
           ref: main
           token: ${{ secrets.JELLYFIN_MANIFEST_REPO_TOKEN }}
           repository: PedroLoures/JellyfinPluginManifest
