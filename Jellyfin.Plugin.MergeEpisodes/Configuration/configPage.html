@@ -24,6 +24,14 @@
                     </div>
 
                     <div class="verticalSection">
+                        <h3 class="checkboxListLabel">Options:</h3>
+                        <label>
+                            <input is="emby-checkbox" type="checkbox" id="chkAutoMerge" />
+                            <span>Automatically merge episodes after library scans (runs every 24 hours)</span>
+                        </label>
+                    </div>
+
+                    <div class="verticalSection">
                         <h3 class="checkboxListLabel">Select paths to exclude from merging:</h3>
                         <div id="divLocations" class="paperList checkboxList checkboxList-paperList">
                         </div>
@@ -309,6 +317,8 @@
                     config.LocationsExcluded = [];
                 }
 
+                document.querySelector('#chkAutoMerge').checked = !!config.AutoMergeAfterLibraryScan;
+
                 ApiClient.getVirtualFolders().then(function (virtualFolders) {
                     loadVirtualFolders(config, virtualFolders);
                 });
@@ -347,6 +357,7 @@
 
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     config.LocationsExcluded = folders;
+                    config.AutoMergeAfterLibraryScan = document.querySelector('#chkAutoMerge').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (res) {
                         Dashboard.processPluginConfigurationUpdateResult(res);
                         logEntry('Configuration saved. ' + folders.length + ' path(s) excluded.', 'me-ok');
