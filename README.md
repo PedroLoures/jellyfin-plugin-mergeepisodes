@@ -306,10 +306,9 @@ dotnet test
 
 ## 🙏 Credits
 
+- Me
 - Original [Merge Versions](https://github.com/danieladov/jellyfin-plugin-mergeversions) plugin by [danieladov](https://github.com/danieladov)
 - Built for the [Jellyfin](https://jellyfin.org) media system
-- Config changes reflected in real-time (no caching)
-- Null path in excluded library check → returns false (eligible)
 
 ## Identity Pattern
 
