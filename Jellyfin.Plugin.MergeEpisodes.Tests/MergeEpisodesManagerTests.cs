@@ -65,10 +65,20 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             _logger = new Mock<ILogger<MergeEpisodesManager>>();
             _fileSystem = new Mock<IFileSystem>();
 
-            // Plugin.Instance is required by IsInExcludedLibrary — we need to set it up.
+            // Plugin.Instance is required by library inclusion checks — we need to set it up.
             // Create a minimal plugin mock via reflection since the constructor requires
             // IServerApplicationPaths + IXmlSerializer. We'll use a helper to bypass this.
             EnsurePluginInstance();
+
+            // Configure /tv as an included library path so episodes are eligible.
+            // Empty list = nothing included, so tests need at least one path.
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/tv");
+
+            // Default: any path starting with /tv is considered inside the /tv library.
+            _fileSystem
+                .Setup(fs => fs.ContainsSubPath("/tv", It.Is<string>(p => p != null && p.StartsWith("/tv", StringComparison.Ordinal))))
+                .Returns(true);
 
             _manager = new MergeEpisodesManager(
                 _libraryManager.Object,
@@ -589,8 +599,9 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             var ep2 = CreateTestEpisode(Guid.NewGuid(), "/other/Show S01E01 1080p.mkv");
             SetupLibraryReturns(ep1, ep2);
 
-            // Configure included location that doesn't match the episodes
-            Plugin.Instance!.Configuration.LocationsIncluded.Add("/included");
+            // Replace default /tv inclusion with /included (which won't match /other paths)
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/included");
             _fileSystem
                 .Setup(fs => fs.ContainsSubPath("/included", It.IsAny<string>()))
                 .Returns(false);
@@ -600,8 +611,9 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             Assert.Equal(0, result.Succeeded);
             Assert.Equal(0, result.Failed);
 
-            // Clean up
+            // Restore default /tv inclusion
             Plugin.Instance.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/tv");
         }
 
         [Fact]

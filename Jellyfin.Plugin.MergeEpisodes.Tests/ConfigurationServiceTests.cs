@@ -95,17 +95,16 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         [Fact]
         public void LocationsIncluded_ReflectsLiveModifications()
         {
-            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var service = new ConfigurationService();
 
-            Assert.Empty(service.LocationsIncluded);
+            // Adding a unique path should be reflected immediately via the service
+            var uniquePath = "/test-live-" + Guid.NewGuid().ToString("N");
+            Plugin.Instance!.Configuration.LocationsIncluded.Add(uniquePath);
+            Assert.Contains(uniquePath, service.LocationsIncluded);
 
-            Plugin.Instance.Configuration.LocationsIncluded.Add("/new/path");
-            Assert.Single(service.LocationsIncluded);
-            Assert.Contains("/new/path", service.LocationsIncluded);
-
-            // Cleanup
-            Plugin.Instance.Configuration.LocationsIncluded.Clear();
+            // Removing it should also be reflected
+            Plugin.Instance.Configuration.LocationsIncluded.Remove(uniquePath);
+            Assert.DoesNotContain(uniquePath, service.LocationsIncluded);
         }
     }
 }

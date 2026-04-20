@@ -93,10 +93,10 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         }
 
         /// <summary>
-        /// When no inclusions are configured (empty list), all episodes are returned.
+        /// When no inclusions are configured (empty list), no episodes are returned.
         /// </summary>
         [Fact]
-        public void GetEligibleEpisodes_NoInclusions_ReturnsAll()
+        public void GetEligibleEpisodes_NoInclusions_ReturnsEmpty()
         {
             Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var ep1 = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
@@ -108,7 +108,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
 
             var result = _service.GetEligibleEpisodes();
 
-            Assert.Equal(2, result.Count);
+            Assert.Empty(result);
         }
 
         /// <summary>
@@ -150,15 +150,15 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         // ═══════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// When no inclusions are configured (empty list), all items are considered included.
+        /// When no inclusions are configured (empty list), no items are considered included.
         /// </summary>
         [Fact]
-        public void IsInIncludedLibrary_NoInclusions_ReturnsTrue()
+        public void IsInIncludedLibrary_NoInclusions_ReturnsFalse()
         {
             Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var ep = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
 
-            Assert.True(_service.IsInIncludedLibrary(ep));
+            Assert.False(_service.IsInIncludedLibrary(ep));
         }
 
         /// <summary>
@@ -200,15 +200,15 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         }
 
         /// <summary>
-        /// IsEligible delegates to IsInIncludedLibrary.
+        /// IsEligible delegates to IsInIncludedLibrary — empty list means not eligible.
         /// </summary>
         [Fact]
-        public void IsEligible_InIncludedLibrary_ReturnsTrue()
+        public void IsEligible_NoInclusions_ReturnsFalse()
         {
             Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var ep = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
 
-            Assert.True(_service.IsEligible(ep));
+            Assert.False(_service.IsEligible(ep));
         }
 
         /// <summary>
@@ -229,16 +229,16 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         }
 
         /// <summary>
-        /// An item with a null Path should be included when no filter is active (empty list).
+        /// An item with a null Path should not be included when no paths are configured (empty list).
         /// </summary>
         [Fact]
-        public void IsInIncludedLibrary_NullPath_NoFilter_ReturnsTrue()
+        public void IsInIncludedLibrary_NullPath_NoFilter_ReturnsFalse()
         {
             Plugin.Instance!.Configuration.LocationsIncluded.Clear();
 
             var ep = new Episode { Id = Guid.NewGuid(), Path = null! };
 
-            Assert.True(_service.IsInIncludedLibrary(ep));
+            Assert.False(_service.IsInIncludedLibrary(ep));
         }
 
         /// <summary>

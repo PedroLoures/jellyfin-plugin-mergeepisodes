@@ -66,8 +66,8 @@ namespace Jellyfin.Plugin.MergeEpisodes
 
         /// <summary>
         /// Determines whether an item is eligible for merge/split operations.
-        /// An item is eligible if the included-paths list is empty (all included)
-        /// or if the item resides within one of the included paths.
+        /// An item is eligible only if it resides within one of the included paths.
+        /// An empty included-paths list means nothing is eligible.
         /// </summary>
         /// <param name="item">The item to check.</param>
         /// <returns>True if the item is eligible; false otherwise.</returns>
@@ -78,19 +78,19 @@ namespace Jellyfin.Plugin.MergeEpisodes
 
         /// <summary>
         /// Checks whether an item's path falls within a user-configured included location.
-        /// An empty include list means all libraries are included.
+        /// An empty include list means nothing is included (no merges until the user selects paths).
         /// Uses the IFileSystem.ContainsSubPath method for platform-aware path comparison.
         /// </summary>
         /// <param name="item">The item to check.</param>
-        /// <returns>True if the item is in an included library (or no filter is set); false otherwise.</returns>
+        /// <returns>True if the item is in an included library; false otherwise.</returns>
         public bool IsInIncludedLibrary(BaseItem item)
         {
             var included = _configService.LocationsIncluded;
 
-            // Empty list = all libraries included (fresh install / no filter)
+            // Empty list = nothing included (user must explicitly select paths)
             if (included.Count == 0)
             {
-                return true;
+                return false;
             }
 
             if (item.Path is null)
