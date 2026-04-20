@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.MergeEpisodes.Configuration
@@ -17,8 +18,9 @@ namespace Jellyfin.Plugin.MergeEpisodes.Configuration
         }
 
         /// <summary>
-        /// Gets the library paths excluded from merging.
+        /// Gets or sets the library paths excluded from merging.
         /// </summary>
-        public IList<string> LocationsExcluded { get; }
+        [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Jellyfin XML serializer requires a setter for deserialization.")]
+        public IList<string> LocationsExcluded { get; set; }
     }
 }
