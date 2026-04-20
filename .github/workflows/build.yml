@@ -16,7 +16,7 @@ jobs:
     steps:
       # ── 1. Checkout plugin repo ────────────────────────────────────────────
       - name: Checkout plugin repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: master
 
@@ -45,7 +45,7 @@ jobs:
 
       # ── 3. Setup .NET ──────────────────────────────────────────────────────
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'   # Change to your target .NET version
 
@@ -111,7 +111,7 @@ jobs:
 
       # ── 8. Create GitHub Release and upload the zip ────────────────────────
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: "v${{ steps.version.outputs.version }}"
           name: "v${{ steps.version.outputs.version }}"
@@ -121,7 +121,7 @@ jobs:
 
       # ── 9. Update manifest in your separate manifest repo ─────────────────
       - name: Checkout manifest repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # Set this secret in your plugin repo:
           # Settings → Secrets → Actions → New repository secret
