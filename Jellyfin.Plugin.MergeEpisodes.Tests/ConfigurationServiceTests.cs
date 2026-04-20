@@ -7,7 +7,7 @@
 // occur when the plugin hasn't been initialized (e.g., during testing or early boot).
 //
 // Key behaviors tested:
-//   1. LocationsExcluded property reflects current config state
+//   1. LocationsIncluded property reflects current config state
 //   2. Defaults are returned when Plugin.Instance has a fresh configuration
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -53,61 +53,59 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             _ = new Plugin(appPaths.Object, xmlSerializer.Object);
         }
 
-        // ── LocationsExcluded ───────────────────────────────────────────────────
+        // ── LocationsIncluded ───────────────────────────────────────────────────
 
         /// <summary>
-        /// Verifies that LocationsExcluded defaults to an empty list,
-        /// meaning no libraries are excluded from merging.
+        /// Verifies that LocationsIncluded defaults to an empty list,
+        /// meaning all libraries are included for merging.
         /// </summary>
         [Fact]
-        public void LocationsExcluded_DefaultsToEmptyList()
+        public void LocationsIncluded_DefaultsToEmptyList()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var service = new ConfigurationService();
 
-            Assert.Empty(service.LocationsExcluded);
+            Assert.Empty(service.LocationsIncluded);
         }
 
         /// <summary>
-        /// Verifies that when exclusion locations are configured,
+        /// Verifies that when inclusion locations are configured,
         /// the ConfigurationService correctly exposes them.
         /// </summary>
         [Fact]
-        public void LocationsExcluded_ReflectsConfiguredLocations()
+        public void LocationsIncluded_ReflectsConfiguredLocations()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
-            Plugin.Instance.Configuration.LocationsExcluded.Add("/mnt/anime");
-            Plugin.Instance.Configuration.LocationsExcluded.Add("/mnt/kids");
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/mnt/anime");
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/mnt/kids");
             var service = new ConfigurationService();
 
-            // Should contain both configured exclusions
-            Assert.Equal(2, service.LocationsExcluded.Count);
-            Assert.Contains("/mnt/anime", service.LocationsExcluded);
-            Assert.Contains("/mnt/kids", service.LocationsExcluded);
+            Assert.Equal(2, service.LocationsIncluded.Count);
+            Assert.Contains("/mnt/anime", service.LocationsIncluded);
+            Assert.Contains("/mnt/kids", service.LocationsIncluded);
 
             // Cleanup
-            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
         }
 
         /// <summary>
-        /// Verifies that modifications to LocationsExcluded are reflected live
+        /// Verifies that modifications to LocationsIncluded are reflected live
         /// (same reference from the underlying config, not a copy).
         /// </summary>
         [Fact]
-        public void LocationsExcluded_ReflectsLiveModifications()
+        public void LocationsIncluded_ReflectsLiveModifications()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var service = new ConfigurationService();
 
-            Assert.Empty(service.LocationsExcluded);
+            Assert.Empty(service.LocationsIncluded);
 
-            // Add a location — should be visible immediately
-            Plugin.Instance.Configuration.LocationsExcluded.Add("/new/path");
-            Assert.Single(service.LocationsExcluded);
-            Assert.Contains("/new/path", service.LocationsExcluded);
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/new/path");
+            Assert.Single(service.LocationsIncluded);
+            Assert.Contains("/new/path", service.LocationsIncluded);
 
             // Cleanup
-            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
         }
     }
 }

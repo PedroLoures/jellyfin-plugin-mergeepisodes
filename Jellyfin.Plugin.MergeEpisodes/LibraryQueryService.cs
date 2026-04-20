@@ -12,7 +12,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
 {
     /// <summary>
     /// Service for querying episodes from the Jellyfin library.
-    /// Handles filtering by eligibility (e.g., excluded library locations).
+    /// Handles filtering by eligibility (e.g., included library locations).
     /// Follows the LanguageTags LibraryQueryService pattern for testability.
     /// </summary>
     public class LibraryQueryService
@@ -42,8 +42,9 @@ namespace Jellyfin.Plugin.MergeEpisodes
         }
 
         /// <summary>
-        /// Gets all eligible episodes from the library, excluding those in user-configured
-        /// excluded locations. Only non-virtual, recursive episodes are returned.
+        /// Gets all eligible episodes from the library, filtering to only include
+        /// user-configured locations. Only non-virtual, recursive episodes are returned.
+        /// An empty include list means all libraries are eligible.
         /// </summary>
         /// <returns>List of eligible episodes.</returns>
         public ReadOnlyCollection<Episode> GetEligibleEpisodes()
@@ -65,31 +66,39 @@ namespace Jellyfin.Plugin.MergeEpisodes
 
         /// <summary>
         /// Determines whether an item is eligible for merge/split operations.
-        /// An item is ineligible if it resides in an excluded library location.
+        /// An item is eligible if the included-paths list is empty (all included)
+        /// or if the item resides within one of the included paths.
         /// </summary>
         /// <param name="item">The item to check.</param>
-        /// <returns>True if the item is eligible; false if excluded.</returns>
+        /// <returns>True if the item is eligible; false otherwise.</returns>
         public bool IsEligible(BaseItem item)
         {
-            return !IsInExcludedLibrary(item);
+            return IsInIncludedLibrary(item);
         }
 
         /// <summary>
-        /// Checks whether an item's path falls within any user-configured excluded location.
+        /// Checks whether an item's path falls within a user-configured included location.
+        /// An empty include list means all libraries are included.
         /// Uses the IFileSystem.ContainsSubPath method for platform-aware path comparison.
         /// </summary>
         /// <param name="item">The item to check.</param>
-        /// <returns>True if the item is in an excluded library; false otherwise.</returns>
-        public bool IsInExcludedLibrary(BaseItem item)
+        /// <returns>True if the item is in an included library (or no filter is set); false otherwise.</returns>
+        public bool IsInIncludedLibrary(BaseItem item)
         {
+            var included = _configService.LocationsIncluded;
+
+            // Empty list = all libraries included (fresh install / no filter)
+            if (included.Count == 0)
+            {
+                return true;
+            }
+
             if (item.Path is null)
             {
                 return false;
             }
 
-            var excluded = _configService.LocationsExcluded;
-            return excluded.Count > 0
-                   && excluded.Any(s => _fileSystem.ContainsSubPath(s, item.Path));
+            return included.Any(s => _fileSystem.ContainsSubPath(s, item.Path));
         }
     }
 }

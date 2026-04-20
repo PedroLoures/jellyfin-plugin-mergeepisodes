@@ -6,11 +6,11 @@
 // where library querying is extracted into its own service for testability.
 //
 // Key behaviors tested:
-//   1. Returns all episodes when no exclusions are configured
-//   2. Filters out episodes in excluded library locations
+//   1. Returns all episodes when no inclusions are configured (empty = all)
+//   2. Filters out episodes NOT in included library locations
 //   3. Returns empty when library has no episodes
-//   4. IsInExcludedLibrary correctly checks the config + filesystem
-//   5. IsEligible inverts IsInExcludedLibrary
+//   4. IsInIncludedLibrary correctly checks the config + filesystem
+//   5. IsEligible delegates to IsInIncludedLibrary
 // ═══════════════════════════════════════════════════════════════════════════════
 
 using System;
@@ -30,7 +30,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
 {
     /// <summary>
     /// Tests for <see cref="LibraryQueryService"/>, verifying episode querying
-    /// and library exclusion filtering logic.
+    /// and library inclusion filtering logic.
     /// </summary>
     public class LibraryQueryServiceTests
     {
@@ -93,12 +93,12 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         }
 
         /// <summary>
-        /// When no exclusions are configured, all episodes are returned.
+        /// When no inclusions are configured (empty list), all episodes are returned.
         /// </summary>
         [Fact]
-        public void GetEligibleEpisodes_NoExclusions_ReturnsAll()
+        public void GetEligibleEpisodes_NoInclusions_ReturnsAll()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var ep1 = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
             var ep2 = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E02.mkv" };
 
@@ -112,13 +112,13 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         }
 
         /// <summary>
-        /// Episodes in excluded library locations are filtered out.
+        /// Episodes NOT in included library locations are filtered out.
         /// </summary>
         [Fact]
-        public void GetEligibleEpisodes_WithExclusions_FiltersExcludedPaths()
+        public void GetEligibleEpisodes_WithInclusions_FiltersNonIncludedPaths()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
-            Plugin.Instance.Configuration.LocationsExcluded.Add("/anime");
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/tv");
 
             var ep1 = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
             var ep2 = new Episode { Id = Guid.NewGuid(), Path = "/anime/Show S01E01.mkv" };
@@ -127,87 +127,118 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
                 .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
                 .Returns(new List<BaseItem> { ep1, ep2 });
 
-            // Only the anime path is a subpath of /anime
+            // Only /tv path matches inclusion
             _fileSystem
-                .Setup(fs => fs.ContainsSubPath("/anime", "/anime/Show S01E01.mkv"))
+                .Setup(fs => fs.ContainsSubPath("/tv", "/tv/Show S01E01.mkv"))
                 .Returns(true);
             _fileSystem
-                .Setup(fs => fs.ContainsSubPath("/anime", "/tv/Show S01E01.mkv"))
+                .Setup(fs => fs.ContainsSubPath("/tv", "/anime/Show S01E01.mkv"))
                 .Returns(false);
 
             var result = _service.GetEligibleEpisodes();
 
-            // Only ep1 should be returned (ep2 is excluded)
+            // Only ep1 should be returned (ep2 is not in an included path)
             Assert.Single(result);
             Assert.Equal(ep1.Id, result[0].Id);
 
             // Cleanup
-            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // SECTION: IsInExcludedLibrary — path exclusion checks
+        // SECTION: IsInIncludedLibrary — path inclusion checks
         // ═══════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// When no exclusions are configured, no item is considered excluded.
+        /// When no inclusions are configured (empty list), all items are considered included.
         /// </summary>
         [Fact]
-        public void IsInExcludedLibrary_NoExclusions_ReturnsFalse()
+        public void IsInIncludedLibrary_NoInclusions_ReturnsTrue()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var ep = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
 
-            Assert.False(_service.IsInExcludedLibrary(ep));
+            Assert.True(_service.IsInIncludedLibrary(ep));
         }
 
         /// <summary>
-        /// An item whose path is within an excluded location is correctly identified.
+        /// An item whose path is within an included location is correctly identified.
         /// </summary>
         [Fact]
-        public void IsInExcludedLibrary_PathInExcluded_ReturnsTrue()
+        public void IsInIncludedLibrary_PathInIncluded_ReturnsTrue()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
-            Plugin.Instance.Configuration.LocationsExcluded.Add("/excluded");
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/included");
 
-            var ep = new Episode { Id = Guid.NewGuid(), Path = "/excluded/Show S01E01.mkv" };
+            var ep = new Episode { Id = Guid.NewGuid(), Path = "/included/Show S01E01.mkv" };
             _fileSystem
-                .Setup(fs => fs.ContainsSubPath("/excluded", "/excluded/Show S01E01.mkv"))
+                .Setup(fs => fs.ContainsSubPath("/included", "/included/Show S01E01.mkv"))
                 .Returns(true);
 
-            Assert.True(_service.IsInExcludedLibrary(ep));
+            Assert.True(_service.IsInIncludedLibrary(ep));
 
-            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
         }
 
         /// <summary>
-        /// IsEligible is the inverse of IsInExcludedLibrary.
+        /// An item whose path is NOT in any included location is not eligible.
         /// </summary>
         [Fact]
-        public void IsEligible_NotExcluded_ReturnsTrue()
+        public void IsInIncludedLibrary_PathNotInIncluded_ReturnsFalse()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/included");
+
+            var ep = new Episode { Id = Guid.NewGuid(), Path = "/other/Show S01E01.mkv" };
+            _fileSystem
+                .Setup(fs => fs.ContainsSubPath("/included", "/other/Show S01E01.mkv"))
+                .Returns(false);
+
+            Assert.False(_service.IsInIncludedLibrary(ep));
+
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
+        }
+
+        /// <summary>
+        /// IsEligible delegates to IsInIncludedLibrary.
+        /// </summary>
+        [Fact]
+        public void IsEligible_InIncludedLibrary_ReturnsTrue()
+        {
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             var ep = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
 
             Assert.True(_service.IsEligible(ep));
         }
 
         /// <summary>
-        /// An item with a null Path (corrupted or virtual) should not be considered excluded
-        /// and must not throw a NullReferenceException in ContainsSubPath.
+        /// An item with a null Path should be considered not included when a filter is active,
+        /// and must not throw a NullReferenceException.
         /// </summary>
         [Fact]
-        public void IsInExcludedLibrary_NullPath_ReturnsFalse()
+        public void IsInIncludedLibrary_NullPath_WithFilter_ReturnsFalse()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
-            Plugin.Instance.Configuration.LocationsExcluded.Add("/excluded");
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/included");
 
             var ep = new Episode { Id = Guid.NewGuid(), Path = null! };
 
-            // Should return false (not excluded) rather than throwing
-            Assert.False(_service.IsInExcludedLibrary(ep));
+            Assert.False(_service.IsInIncludedLibrary(ep));
 
-            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
+        }
+
+        /// <summary>
+        /// An item with a null Path should be included when no filter is active (empty list).
+        /// </summary>
+        [Fact]
+        public void IsInIncludedLibrary_NullPath_NoFilter_ReturnsTrue()
+        {
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+
+            var ep = new Episode { Id = Guid.NewGuid(), Path = null! };
+
+            Assert.True(_service.IsInIncludedLibrary(ep));
         }
 
         /// <summary>
@@ -216,8 +247,8 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         [Fact]
         public void GetEligibleEpisodes_EpisodeWithNullPath_DoesNotThrow()
         {
-            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
-            Plugin.Instance.Configuration.LocationsExcluded.Add("/excluded");
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/included");
 
             var ep1 = new Episode { Id = Guid.NewGuid(), Path = null! };
             var ep2 = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
@@ -227,14 +258,15 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
                 .Returns(new List<BaseItem> { ep1, ep2 });
 
             _fileSystem
-                .Setup(fs => fs.ContainsSubPath(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(false);
+                .Setup(fs => fs.ContainsSubPath("/included", "/tv/Show S01E01.mkv"))
+                .Returns(true);
 
-            // Should not throw; both episodes are eligible (null path is not "excluded")
+            // Should not throw; ep1 (null path) is excluded by filter, ep2 is included
             var result = _service.GetEligibleEpisodes();
-            Assert.Equal(2, result.Count);
+            Assert.Single(result);
+            Assert.Equal(ep2.Id, result[0].Id);
 
-            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
         }
     }
 }

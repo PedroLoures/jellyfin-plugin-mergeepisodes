@@ -24,10 +24,18 @@
                         </p>
                     </div>
 
-                    <!-- ── Excluded Paths Card ── -->
+                    <!-- ── Included Paths Card ── -->
                     <div class="me-card">
-                        <h3 class="me-card-title">&#128274; Excluded Library Paths</h3>
-                        <p class="me-card-desc">Episodes in checked paths will be skipped during merge and split operations.</p>
+                        <h3 class="me-card-title">&#128194; Included Library Paths</h3>
+                        <p class="me-card-desc">Only checked paths will be processed during merge and split operations. All paths are included by default.</p>
+                        <div style="margin-bottom:.6em">
+                            <button is="emby-button" type="button" class="raised emby-button me-btn-secondary" style="font-size:.85em; padding:.3em .8em" onclick="selectAllPaths()">
+                                <span>&#9745; Select All</span>
+                            </button>
+                            <button is="emby-button" type="button" class="raised emby-button me-btn-secondary" style="font-size:.85em; padding:.3em .8em; margin-left:.3em" onclick="deselectAllPaths()">
+                                <span>&#9744; Deselect All</span>
+                            </button>
+                        </div>
                         <div id="divLocations" class="paperList checkboxList checkboxList-paperList">
                             <span class="me-empty-hint">Loading library paths&hellip;</span>
                         </div>
@@ -440,8 +448,8 @@
                 ApiClient.getPluginConfiguration(pluginId).then(function (savedConfig) {
                     var config = savedConfig;
 
-                    if (!config.LocationsExcluded) {
-                        config.LocationsExcluded = [];
+                    if (!config.LocationsIncluded) {
+                        config.LocationsIncluded = [];
                     }
 
                     ApiClient.getVirtualFolders()
@@ -475,10 +483,11 @@
 
             function getFolderHtml(currentConfig, virtualFolder, index) {
                 var html = '';
+                var includeAll = currentConfig.LocationsIncluded.length === 0;
                 for (var i = 0, length = virtualFolder.Locations.length; i < length; i++) {
                     var id = 'chkFolder' + index + '_' + i;
                     var location = virtualFolder.Locations[i];
-                    var isChecked = currentConfig.LocationsExcluded.some(function (current) {
+                    var isChecked = includeAll || currentConfig.LocationsIncluded.some(function (current) {
                         return current.toLowerCase() === location.toLowerCase();
                     });
                     var checkedAttribute = isChecked ? 'checked="checked"' : '';
@@ -487,16 +496,24 @@
                 return html;
             }
 
+            function selectAllPaths() {
+                $('.chkLibrary').each(function () { this.checked = true; });
+            }
+
+            function deselectAllPaths() {
+                $('.chkLibrary').each(function () { this.checked = false; });
+            }
+
             function save() {
                 var folders = $('.chkLibrary:checked').map(function () {
                     return this.getAttribute('data-location');
                 }).get();
 
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-                    config.LocationsExcluded = folders;
+                    config.LocationsIncluded = folders;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (res) {
                         Dashboard.processPluginConfigurationUpdateResult(res);
-                        logEntry('Configuration saved. ' + folders.length + ' path(s) excluded.', 'me-ok');
+                        logEntry('Configuration saved. ' + folders.length + ' path(s) included.', 'me-ok');
                     });
                 });
             }

@@ -14,13 +14,14 @@ namespace Jellyfin.Plugin.MergeEpisodes.Configuration
         /// </summary>
         public PluginConfiguration()
         {
-            LocationsExcluded = new List<string>();
+            LocationsIncluded = new List<string>();
         }
 
         /// <summary>
-        /// Gets or sets the library paths excluded from merging.
+        /// Gets or sets the library paths included for merging.
+        /// An empty list means all libraries are included (default for fresh installs).
         /// </summary>
         [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Jellyfin XML serializer requires a setter for deserialization.")]
-        public IList<string> LocationsExcluded { get; set; }
+        public IList<string> LocationsIncluded { get; set; }
     }
 }

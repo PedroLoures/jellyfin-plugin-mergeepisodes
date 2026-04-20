@@ -15,8 +15,9 @@ namespace Jellyfin.Plugin.MergeEpisodes
         private PluginConfiguration Config => Plugin.Instance?.Configuration ?? DefaultConfig;
 
         /// <summary>
-        /// Gets the library locations excluded from merging.
+        /// Gets the library locations included for merging.
+        /// An empty list means all libraries are included.
         /// </summary>
-        public System.Collections.Generic.IList<string> LocationsExcluded => Config.LocationsExcluded;
+        public System.Collections.Generic.IList<string> LocationsIncluded => Config.LocationsIncluded;
     }
 }

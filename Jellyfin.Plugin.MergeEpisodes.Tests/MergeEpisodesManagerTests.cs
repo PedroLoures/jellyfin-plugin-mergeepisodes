@@ -584,16 +584,16 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         [Fact]
         public async Task MergeEpisodesAsync_ExcludedLibrary_SkipsEpisodes()
         {
-            // Episodes in excluded locations should not be merged
-            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/excluded/Show S01E01 720p.mkv");
-            var ep2 = CreateTestEpisode(Guid.NewGuid(), "/excluded/Show S01E01 1080p.mkv");
+            // Episodes NOT in included locations should not be merged
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/other/Show S01E01 720p.mkv");
+            var ep2 = CreateTestEpisode(Guid.NewGuid(), "/other/Show S01E01 1080p.mkv");
             SetupLibraryReturns(ep1, ep2);
 
-            // Configure excluded location
-            Plugin.Instance!.Configuration.LocationsExcluded.Add("/excluded");
+            // Configure included location that doesn't match the episodes
+            Plugin.Instance!.Configuration.LocationsIncluded.Add("/included");
             _fileSystem
-                .Setup(fs => fs.ContainsSubPath(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(true);
+                .Setup(fs => fs.ContainsSubPath("/included", It.IsAny<string>()))
+                .Returns(false);
 
             var result = await _manager.MergeEpisodesAsync(null);
 
@@ -601,7 +601,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             Assert.Equal(0, result.Failed);
 
             // Clean up
-            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
         }
 
         [Fact]
