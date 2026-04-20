@@ -32,6 +32,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
         private readonly LibraryQueryService _queryService;
 
         private CancellationTokenSource? _cts;
+        private volatile bool _disposed;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MergeEpisodesManager"/> class.
@@ -52,6 +53,19 @@ namespace Jellyfin.Plugin.MergeEpisodes
         /// <inheritdoc />
         public void Dispose()
         {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+
+            // Cancel any in-flight operation before disposing resources.
+            lock (_lock)
+            {
+                _cts?.Cancel();
+            }
+
             _cts?.Dispose();
             _operationGuard.Dispose();
             GC.SuppressFinalize(this);
@@ -193,6 +207,8 @@ namespace Jellyfin.Plugin.MergeEpisodes
 
         private CancellationToken BeginOperation()
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
             lock (_lock)
             {
                 _cts?.Cancel();

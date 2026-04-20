@@ -44,7 +44,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
         /// <summary>
         /// Gets all eligible episodes from the library, filtering to only include
         /// user-configured locations. Only non-virtual, recursive episodes are returned.
-        /// An empty include list means all libraries are eligible.
+        /// An empty include list means no episodes are eligible (user must select paths).
         /// </summary>
         /// <returns>List of eligible episodes.</returns>
         public ReadOnlyCollection<Episode> GetEligibleEpisodes()

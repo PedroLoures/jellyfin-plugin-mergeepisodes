@@ -805,5 +805,197 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             Assert.Equal(0, result.Succeeded);
             Assert.Equal(0, result.Failed);
         }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SECTION: Dispose safety
+        // Verifies Dispose cancels running operations and guards against
+        // use-after-dispose.
+        // ═══════════════════════════════════════════════════════════════════
+
+        [Fact]
+        public async Task MergeEpisodesAsync_AfterDispose_ThrowsObjectDisposedException()
+        {
+            // Using a disposed manager must throw rather than corrupt state.
+            var manager = new MergeEpisodesManager(
+                _libraryManager.Object,
+                _logger.Object,
+                new LibraryQueryService(
+                    _libraryManager.Object,
+                    _fileSystem.Object,
+                    new ConfigurationService(),
+                    new Mock<ILogger<LibraryQueryService>>().Object));
+
+            manager.Dispose();
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(
+                () => manager.MergeEpisodesAsync(null));
+        }
+
+        [Fact]
+        public async Task SplitEpisodesAsync_AfterDispose_ThrowsObjectDisposedException()
+        {
+            var manager = new MergeEpisodesManager(
+                _libraryManager.Object,
+                _logger.Object,
+                new LibraryQueryService(
+                    _libraryManager.Object,
+                    _fileSystem.Object,
+                    new ConfigurationService(),
+                    new Mock<ILogger<LibraryQueryService>>().Object));
+
+            manager.Dispose();
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(
+                () => manager.SplitEpisodesAsync(null));
+        }
+
+        [Fact]
+        public async Task SplitAllEpisodesAsync_AfterDispose_ThrowsObjectDisposedException()
+        {
+            var manager = new MergeEpisodesManager(
+                _libraryManager.Object,
+                _logger.Object,
+                new LibraryQueryService(
+                    _libraryManager.Object,
+                    _fileSystem.Object,
+                    new ConfigurationService(),
+                    new Mock<ILogger<LibraryQueryService>>().Object));
+
+            manager.Dispose();
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(
+                () => manager.SplitAllEpisodesAsync(null));
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SECTION: Include-path edge cases
+        // Verifies merge/split behavior with multiple included paths and
+        // the empty-list semantic.
+        // ═══════════════════════════════════════════════════════════════════
+
+        [Fact]
+        public async Task MergeEpisodesAsync_MultipleIncludedPaths_MergesFromBoth()
+        {
+            // Episodes in two different included paths should both be eligible.
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/tv");
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/anime");
+
+            _fileSystem
+                .Setup(fs => fs.ContainsSubPath("/tv", It.Is<string>(p => p != null && p.StartsWith("/tv/", StringComparison.Ordinal))))
+                .Returns(true);
+            _fileSystem
+                .Setup(fs => fs.ContainsSubPath("/anime", It.Is<string>(p => p != null && p.StartsWith("/anime/", StringComparison.Ordinal))))
+                .Returns(true);
+
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 720p.mkv");
+            var ep2 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 1080p.mkv");
+            var ep3 = CreateTestEpisode(Guid.NewGuid(), "/anime/Anime S01E01 720p.mkv");
+            var ep4 = CreateTestEpisode(Guid.NewGuid(), "/anime/Anime S01E01 1080p.mkv");
+            SetupLibraryReturns(ep1, ep2, ep3, ep4);
+
+            _libraryManager
+                .Setup(l => l.GetItemById<BaseItem>(It.IsAny<Guid>(), null))
+                .Returns((Guid id, object? _) =>
+                {
+                    var all = new BaseItem[] { ep1, ep2, ep3, ep4 };
+                    return all.FirstOrDefault(e => e.Id == id);
+                });
+
+            var result = await _manager.MergeEpisodesAsync(null);
+
+            // Two groups: Show S01E01 (from /tv) and Anime S01E01 (from /anime)
+            Assert.Equal(2, result.Succeeded + result.Failed);
+
+            // Restore
+            Plugin.Instance.Configuration.LocationsIncluded.Clear();
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/tv");
+        }
+
+        [Fact]
+        public async Task SplitEpisodesAsync_EmptyIncludedPaths_ReturnsZero()
+        {
+            // With empty included paths (nothing selected), split should do nothing.
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 720p.mkv");
+            SetupLibraryReturns(ep1);
+
+            var result = await _manager.SplitEpisodesAsync(null);
+
+            Assert.Equal(0, result.Succeeded);
+            Assert.Equal(0, result.Failed);
+
+            // Restore
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/tv");
+        }
+
+        [Fact]
+        public async Task SplitAllEpisodesAsync_EmptyIncludedPaths_ReturnsZero()
+        {
+            // With empty included paths (nothing selected), split-all should do nothing.
+            Plugin.Instance!.Configuration.LocationsIncluded.Clear();
+
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 720p.mkv");
+            SetupLibraryReturns(ep1);
+
+            var result = await _manager.SplitAllEpisodesAsync(null);
+
+            Assert.Equal(0, result.Succeeded);
+            Assert.Equal(0, result.Failed);
+
+            // Restore
+            Plugin.Instance.Configuration.LocationsIncluded.Add("/tv");
+        }
+
+        [Fact]
+        public async Task MergeEpisodesAsync_LargeGroup_ProcessesAllVersions()
+        {
+            // 4+ episodes with the same identity should all be merged into one group.
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 720p.mkv");
+            var ep2 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 1080p.mkv");
+            var ep3 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 4K.mkv");
+            var ep4 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 480p.mkv");
+            SetupLibraryReturns(ep1, ep2, ep3, ep4);
+
+            _libraryManager
+                .Setup(l => l.GetItemById<BaseItem>(It.IsAny<Guid>(), null))
+                .Returns((Guid id, object? _) =>
+                {
+                    var all = new BaseItem[] { ep1, ep2, ep3, ep4 };
+                    return all.FirstOrDefault(e => e.Id == id);
+                });
+
+            var result = await _manager.MergeEpisodesAsync(null);
+
+            // Single group with 4 items
+            Assert.Equal(1, result.Succeeded + result.Failed);
+        }
+
+        [Fact]
+        public async Task MergeEpisodesAsync_MixedIncludedAndExcluded_OnlyMergesIncluded()
+        {
+            // Only episodes in included paths should be merged; others are skipped entirely.
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 720p.mkv");
+            var ep2 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 1080p.mkv");
+            var ep3 = CreateTestEpisode(Guid.NewGuid(), "/movies/Show S01E01 720p.mkv");
+            SetupLibraryReturns(ep1, ep2, ep3);
+
+            // /movies is NOT in included paths, so ep3 should be filtered out.
+            // Default mock only matches /tv paths.
+
+            _libraryManager
+                .Setup(l => l.GetItemById<BaseItem>(It.IsAny<Guid>(), null))
+                .Returns((Guid id, object? _) =>
+                {
+                    var all = new BaseItem[] { ep1, ep2, ep3 };
+                    return all.FirstOrDefault(e => e.Id == id);
+                });
+
+            var result = await _manager.MergeEpisodesAsync(null);
+
+            // Only the /tv group (ep1 + ep2) should be processed
+            Assert.Equal(1, result.Succeeded + result.Failed);
+        }
     }
 }
