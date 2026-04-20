@@ -19,7 +19,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Configuration
 
         /// <summary>
         /// Gets or sets the library paths included for merging.
-        /// An empty list means all libraries are included (default for fresh installs).
+        /// An empty list means nothing is included (user must select paths after install).
         /// </summary>
         [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Jellyfin XML serializer requires a setter for deserialization.")]
         public IList<string> LocationsIncluded { get; set; }

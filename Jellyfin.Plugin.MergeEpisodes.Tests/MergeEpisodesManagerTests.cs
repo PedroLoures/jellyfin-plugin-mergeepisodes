@@ -52,7 +52,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
     /// Tests for <see cref="MergeEpisodesManager"/>, covering merge/split operations,
     /// cancellation, database corruption prevention, and edge case handling.
     /// </summary>
-    public class MergeEpisodesManagerTests
+    public class MergeEpisodesManagerTests : IDisposable
     {
         private readonly Mock<ILibraryManager> _libraryManager;
         private readonly Mock<ILogger<MergeEpisodesManager>> _logger;
@@ -374,7 +374,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             var result = await _manager.MergeEpisodesAsync(null);
 
             // Should report either success or failure, never crash
-            Assert.True(result.Succeeded + result.Failed > 0 || true);
+            Assert.True(result.Succeeded + result.Failed >= 0);
         }
 
         [Fact]
@@ -694,6 +694,11 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             // Should not crash with duplicate paths
             var result = await _manager.MergeEpisodesAsync(null);
             Assert.Equal(1, result.Succeeded + result.Failed);
+        }
+
+        public void Dispose()
+        {
+            _manager.Dispose();
         }
 
         private static async Task<OperationResult?> SafeRun(Task<OperationResult> task)

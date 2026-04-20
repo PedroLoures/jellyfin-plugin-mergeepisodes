@@ -6,7 +6,7 @@
 // where library querying is extracted into its own service for testability.
 //
 // Key behaviors tested:
-//   1. Returns all episodes when no inclusions are configured (empty = all)
+//   1. Returns no episodes when no inclusions are configured (empty = nothing)
 //   2. Filters out episodes NOT in included library locations
 //   3. Returns empty when library has no episodes
 //   4. IsInIncludedLibrary correctly checks the config + filesystem

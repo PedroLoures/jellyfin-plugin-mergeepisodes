@@ -491,7 +491,9 @@
                         return current.toLowerCase() === location.toLowerCase();
                     });
                     var checkedAttribute = isChecked ? 'checked="checked"' : '';
-                    html += '<label><input is="emby-checkbox" class="chkLibrary" type="checkbox" data-mini="true" id="' + id + '" name="' + id + '" data-location="' + location + '" ' + checkedAttribute + ' /><span>' + virtualFolder.Name + ' &mdash; <code style="opacity:.7; font-size:.9em">' + location + '</code></span></label>';
+                    var safeLocation = location.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    var safeName = virtualFolder.Name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    html += '<label><input is="emby-checkbox" class="chkLibrary" type="checkbox" data-mini="true" id="' + id + '" name="' + id + '" data-location="' + safeLocation + '" ' + checkedAttribute + ' /><span>' + safeName + ' &mdash; <code style="opacity:.7; font-size:.9em">' + safeLocation + '</code></span></label>';
                 }
                 return html;
             }

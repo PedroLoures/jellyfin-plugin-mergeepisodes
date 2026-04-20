@@ -16,7 +16,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
 
         /// <summary>
         /// Gets the library locations included for merging.
-        /// An empty list means all libraries are included.
+        /// An empty list means nothing is included (user must select paths).
         /// </summary>
         public System.Collections.Generic.IList<string> LocationsIncluded => Config.LocationsIncluded;
     }
