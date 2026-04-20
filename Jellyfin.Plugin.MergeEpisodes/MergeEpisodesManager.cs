@@ -5,21 +5,22 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-
-#nullable enable
 
 namespace Jellyfin.Plugin.MergeEpisodes
 {
+    /// <summary>
+    /// Result of a merge or split operation.
+    /// </summary>
+    /// <param name="Succeeded">Number of items successfully processed.</param>
+    /// <param name="Failed">Number of items that failed.</param>
+    /// <param name="FailedItems">Names of items that failed.</param>
     public record OperationResult(int Succeeded, int Failed, List<string> FailedItems);
 
+    /// <summary>
+    /// Manages merging and splitting of duplicate episodes.
+    /// </summary>
     public class MergeEpisodesManager
     {
         private readonly ILibraryManager _libraryManager;
@@ -29,6 +30,12 @@ namespace Jellyfin.Plugin.MergeEpisodes
         private static readonly object _lock = new();
         private static CancellationTokenSource? _cts;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MergeEpisodesManager"/> class.
+        /// </summary>
+        /// <param name="libraryManager">The library manager.</param>
+        /// <param name="logger">The logger.</param>
+        /// <param name="fileSystem">The file system.</param>
         public MergeEpisodesManager(
             ILibraryManager libraryManager,
             ILogger<MergeEpisodesManager> logger,
@@ -82,6 +89,11 @@ namespace Jellyfin.Plugin.MergeEpisodes
                 : null;
         }
 
+        /// <summary>
+        /// Scans all episodes and merges duplicates sharing the same SxxExx identity.
+        /// </summary>
+        /// <param name="progress">Optional progress reporter.</param>
+        /// <returns>The operation result.</returns>
         public async Task<OperationResult> MergeEpisodesAsync(IProgress<double>? progress)
         {
             var cancellationToken = BeginOperation();
@@ -126,11 +138,16 @@ namespace Jellyfin.Plugin.MergeEpisodes
         // and SplitAllEpisodesAsync cannot be unit tested because Video.LinkedAlternateVersions
         // is non-virtual and its backing field is managed internally by Jellyfin.
         // These code paths must be verified manually against a running Jellyfin instance.
+        /// <summary>
+        /// Splits all primary merged episodes back into individual items.
+        /// </summary>
+        /// <param name="progress">Optional progress reporter.</param>
+        /// <returns>The operation result.</returns>
         public async Task<OperationResult> SplitEpisodesAsync(IProgress<double>? progress)
         {
             var cancellationToken = BeginOperation();
 
-            // Only target primary versions — splitting a primary already unlinks all its alternates,
+            // Only target primary versions
             // so processing secondary items would be redundant lookups.
             var primaryEpisodes = GetEpisodesFromLibrary()
                 .Where(e => e.LinkedAlternateVersions.Length > 0)
@@ -351,7 +368,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
 
         private bool IsInExcludedLibrary(BaseItem item)
         {
-           return Plugin.Instance.PluginConfiguration.LocationsExcluded != null
+           return Plugin.Instance?.PluginConfiguration.LocationsExcluded != null
                   && Plugin.Instance.PluginConfiguration.LocationsExcluded
                     .Any(s => _fileSystem.ContainsSubPath(s, item.Path));
         }

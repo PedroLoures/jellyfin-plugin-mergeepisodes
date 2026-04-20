@@ -1,6 +1,4 @@
-using System;
 using System.Net.Mime;
-using System.Threading.Tasks;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.IO;
 using Microsoft.AspNetCore.Authorization;
