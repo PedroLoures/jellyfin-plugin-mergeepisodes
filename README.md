@@ -1,133 +1,145 @@
-# Jellyfin Plugin: Merge Episodes
+<p align="center">
+<h1 align="center">Merge Episodes Plugin</h1>
+<p align="center">
+<em>Part of the <a href="https://jellyfin.org">Jellyfin</a> Project</em>
+</p>
+</p>
 
-A Jellyfin plugin that automatically detects and merges duplicate episodes (different quality versions of the same episode) into single entries with multiple playback versions.
+A Jellyfin plugin that automatically groups duplicate episodes (different quality/format versions of the same episode) into single library entries with multiple selectable playback versions.
 
-## Features
+> **Since Jellyfin already handles movie version merging natively, this plugin focuses exclusively on TV episodes.** It follows the [Jellyfin TV show naming conventions](https://jellyfin.org/docs/general/server/media/shows/) — specifically the `Show Name SxxEyy` pattern.
 
-### 🔀 Episode Merging
-Automatically detects episodes that are different versions of the same content (e.g., 720p and 1080p copies) and merges them into a single library entry with multiple selectable versions.
+This is a simplified, rewritten version of [Merge Versions](https://github.com/danieladov/jellyfin-plugin-mergeversions) by danieladov.
 
-**How it works:**
-- Extracts a "base identity" from each episode's filename using the `SxxExx` pattern
-- Groups episodes with the same identity (e.g., `Show S01E01 - 720p.mkv` and `Show S01E01 - 1080p.mkv`)
-- Merges groups into one primary entry with linked alternate versions
-- Selects the highest-resolution non-3D file as the primary version
+---
 
-### ✂️ Episode Splitting
-Reverses the merge operation — splits previously-merged episodes back into individual entries.
+## 📖 Table of Contents
 
-- **Split Episodes** — splits only primary merged episodes (the normal undo)
-- **Split All Episodes** — deep clean that splits ALL episodes with any merge state (primary or secondary), intended to fix issues left by older plugin versions
+- [How It Works](#-how-it-works)
+- [Installation](#-installation)
+- [Configuration](#-configuration)
+- [Supported Naming Conventions](#-supported-naming-conventions)
+- [API Reference](#-api-reference)
+- [Architecture](#-architecture)
+- [Database Safety](#-database-safety)
+- [Testing](#-testing)
+- [Known Limitations](#-known-limitations)
 
-### ⏱️ Scheduled Auto-Merge
-Optionally runs the merge operation automatically on a 24-hour interval.
+---
 
-- Controlled by the **"Automatically merge episodes after library scans"** checkbox in plugin settings
-- Disabled by default (opt-in) — won't run unless explicitly enabled
-- Respects the config flag at execution time (not cached at task creation)
+## 🧠 How It Works
 
-### 🚫 Library Exclusions
-Configure specific library locations to be excluded from merging. Episodes in excluded paths are skipped entirely.
+The plugin extracts a **base identity** from each episode's filename by matching everything up to (and including) the `SxxExx` pattern. Everything **after** the first space past `SxxExx` is ignored — this is how different quality versions are recognized as the same episode.
 
-### 🛡️ Database Corruption Prevention
-Multiple safety mechanisms protect the Jellyfin database from corruption:
+### Identity Matching Examples
 
-1. **SemaphoreSlim Guard** — Ensures only one merge/split operation runs at a time; concurrent requests wait for the current atomic unit to complete
-2. **Primary-First Write Order** — The "master" episode is always written to the database before child episodes, so children always have a valid parent reference
-3. **CancellationToken.None for DB Writes** — Database writes are never abandoned mid-transaction, even if cancellation is requested
-4. **Cancellation Between Groups Only** — Cancellation is checked between episode groups, never in the middle of processing a single group
-5. **Per-Item Resilience** — If one child episode fails to update (e.g., deleted mid-operation, disk I/O error), remaining children are still processed
-6. **Null Path Guards** — Corrupted DB entries with null paths are safely skipped without crashing
+| File A | File B | Same Episode? |
+|--------|--------|:-------------:|
+| `Show Name S01E01 - 720p.mkv` | `Show Name S01E01 - 1080p.mkv` | ✅ Yes |
+| `Show Name S00E01 Test - 1080p.mkv` | `Show Name S00E01 - 720p.mkv` | ✅ Yes |
+| `Show Name S01E01 Test - 1080p.mkv` | `Show Name S01E**02** Test - 1080p.mkv` | ❌ No |
+| `Show Name S01E01 Test - 1080p.mkv` | `Show Name S**02**E01 Test - 1080p.mkv` | ❌ No |
 
-### ⚡ Cancellation Support
-Long-running operations can be cancelled via the plugin UI or API. Cancellation is safe — it completes the current episode group before stopping.
+> **In short:** Anything with the same text up to and including the `SxxExx` identifier is considered the same episode, regardless of quality tags, codec info, or other suffixes.
 
-## Architecture
+### What Happens When You Merge
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Jellyfin Server (DI)                      │
-├─────────────────────────────────────────────────────────────┤
-│  PluginServiceRegistrator                                   │
-│    ├── ConfigurationService (singleton)                     │
-│    ├── LibraryQueryService (singleton)                      │
-│    └── IEpisodeMergeService → MergeEpisodesManager (single) │
-├─────────────────────────────────────────────────────────────┤
-│  MergeEpisodesController (REST API)                         │
-│    └── Uses IEpisodeMergeService via DI                     │
-├─────────────────────────────────────────────────────────────┤
-│  MergeEpisodesTask (IScheduledTask)                         │
-│    ├── Checks ConfigurationService.AutoMergeAfterLibraryScan│
-│    └── Calls IEpisodeMergeService.MergeEpisodesAsync        │
-└─────────────────────────────────────────────────────────────┘
-```
+1. The plugin scans your library for all eligible episodes
+2. Groups episodes that share the same base identity
+3. Picks the first episode as the **primary** version
+4. Links all other versions as **alternate versions** under the primary
+5. In Jellyfin's UI, these appear as a single episode with a "Version" selector
 
-### Key Components
+### What Happens When You Split
 
-| File | Purpose |
-|------|---------|
-| `MergeEpisodesManager.cs` | Core engine — merge/split logic with corruption prevention |
-| `IEpisodeMergeService.cs` | Interface for DI decoupling |
-| `LibraryQueryService.cs` | Library querying with exclusion filtering |
-| `ConfigurationService.cs` | Null-safe centralized config access |
-| `MergeEpisodesTask.cs` | Scheduled task (24hr auto-merge) |
-| `MergeEpisodesController.cs` | REST API endpoints |
-| `PluginServiceRegistrator.cs` | DI registration |
-| `PluginConfiguration.cs` | Config model (exclusions, auto-merge flag) |
-| `configPage.html` | Plugin settings UI |
-| `OperationResult.cs` | Result record type |
+- **Split Episodes** — Reverses the merge: unlinks alternate versions from primary episodes only (the normal undo)
+- **Split All Episodes (Deep Clean)** — Splits ALL episodes with any merge state — including orphaned secondaries. Use this to fix issues left by older plugin versions or corrupted states
 
-## Configuration
+---
+
+## 📦 Installation
+
+### From Repository (Recommended)
+
+1. In Jellyfin, go to **Dashboard → Plugins → Repositories**
+2. Click **Add** and paste this URL:
+   ```
+   https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/main/manifest.json
+   ```
+3. Go to **Catalog** and search for **Merge Episodes**
+4. Click on it and click **Install**
+5. **Restart Jellyfin**
+
+### Manual Installation
+
+1. Download the latest release from the [Releases page](https://github.com/PedroLoures/jellyfin-plugin-mergeepisodes/releases)
+2. Extract the DLL into your Jellyfin plugins directory (e.g., `/config/plugins/MergeEpisodes/`)
+3. **Restart Jellyfin**
+
+---
+
+## ⚙️ Configuration
 
 Access the plugin settings in **Jellyfin Dashboard → Plugins → Merge Episodes**.
 
-### Options
-- **Automatically merge episodes after library scans** — Enable to run merge automatically every 24 hours
-- **Excluded Libraries** — Select library locations to exclude from merging
+### Included Library Paths
 
-### Operations (Manual)
-- **Merge** — Run merge operation now
-- **Split** — Split merged episodes in current view
-- **Split Everything** — Deep clean: split all merged episodes across all libraries
-- **Stop** — Cancel a running operation
+After installation, **no paths are included by default** — the plugin won't process anything until you explicitly select which libraries to include. This is a safety measure to prevent unintended merges.
 
-## API Endpoints
+- Check the paths you want the plugin to process
+- Use **Select All** / **Deselect All** for quick toggling
+- Click **Save Configuration** to apply
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/MergeEpisodes/MergeEpisodes` | Start merge operation |
-| POST | `/MergeEpisodes/SplitEpisodes` | Start split operation |
-| POST | `/MergeEpisodes/SplitAllEpisodes` | Deep clean: split all merged episodes |
-| POST | `/MergeEpisodes/Cancel` | Cancel running operation |
+### Manual Operations
 
-All endpoints require admin authorization (`RequiresElevation` policy).
+| Button | Description |
+|--------|-------------|
+| 🔗 **Merge All Episodes** | Scan included libraries and merge duplicate episodes |
+| ✂️ **Split All Episodes** | Split merged episodes back into individual entries |
+| ⚠️ **Split Everything — Fix Old Plugin Issues** | Deep clean: split ALL episodes with any merge state |
+| ⏹️ **Stop** | Cancel a running operation (finishes the current group safely) |
 
-## Supported Naming Conventions
+### Activity Log
 
-The plugin follows [Jellyfin's official TV show naming documentation](https://jellyfin.org/docs/general/server/media/shows/). Supported file naming patterns:
+The config page includes a real-time activity log that shows:
+- Operation start/completion with elapsed time
+- Success/failure counts per operation
+- Individual failed items (if any)
+
+### Scheduled Task
+
+The plugin registers a **"Merge All Episodes"** task in Jellyfin's **Scheduled Tasks** UI. It has **no automatic triggers** by default — you can add custom triggers (e.g., daily, after library scan) through Jellyfin's built-in task scheduling.
+
+---
+
+## 📂 Supported Naming Conventions
+
+The plugin follows [Jellyfin's official TV show naming documentation](https://jellyfin.org/docs/general/server/media/shows/).
 
 ### Standard Format
+
 ```
-Series Name (Year) SxxExx Episode Title - Tag.ext
+Series Name (Year) SxxExx Episode Title - Tag.extension
 ```
 
-**Examples:**
 ```
+Show Name S01E01.mkv
+Show Name S01E01 - 720p.mkv
+Show Name S01E01 - 1080p - HEVC.mkv
 Series Name A (2010) S01E03.mkv
 Series Name A (2021) S01E01 Title.avi
 Awesome TV Show (2024) S01E01 episode name.mp4
-My Show S02E15 - 1080p - HEVC.mkv
 Show S10E100 Nome Do Episódio - BluRay.mkv
 ```
 
 ### Multi-Episode Format
+
 ```
-Series Name (Year) SxxExx-Eyy.ext
-Series Name (Year) SxxExxEyy.ext
-Series Name (Year) SxxExxnyy.ext
+Series Name SxxExx-Eyy.ext       (dash separator)
+Series Name SxxExxEyy.ext        (concatenated)
+Series Name SxxExxnyy.ext        (n separator)
 ```
 
-**Examples:**
 ```
 Series Name A (2010) S01E01-E02.mkv
 Series Name B (2018) S02E01-E02.mkv
@@ -135,69 +147,167 @@ Show S01E01E02 Pilot Part 1 and 2 - 1080p.mkv
 Show S01E01n02 Nome de Epi - 720p.mkv
 ```
 
-### 3D and Quality Variants (Merge Targets)
+### 3D and Quality Variants
+
+These all merge together because they share the same identity:
+
 ```
 Series Name A (2022) S01E01 Some Episode.3d.ftab.mp4
 Series Name A (2022) S01E01 Some Episode.3d.hsbs.mp4
-Series Name A (2022) S01E01 Some Episode.mkv         ← these all merge together
+Series Name A (2022) S01E01 Some Episode.mkv
 ```
 
 ### Metadata Provider IDs
+
 ```
 Jellyfin Documentary (2030) [imdbid-tt00000000] S01E01.mkv
 ```
 
 ### Specials (Season 00)
+
 ```
 Series Name A S00E01.mkv
 Series Name A S00E02.mkv
 ```
 
-### ⚠️ Known Limitation: Multi-Part Files
-Jellyfin's documentation states that multi-part files (`S01E01-part-1.mkv`, `S01E01-part-2.mkv`) **do not work with merging**. This plugin will incorrectly group them as the same episode because the `-part-N` suffix comes after the `SxxExx` identifier. **Do not use multi-part files with this plugin.**
+---
 
-## Testing
+## 🔌 API Reference
 
-The plugin has a comprehensive test suite covering all features:
+All endpoints require admin authorization (`RequiresElevation` policy).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/MergeEpisodes/MergeEpisodes` | Start merge operation |
+| `POST` | `/MergeEpisodes/SplitEpisodes` | Split merged episodes (primary only) |
+| `POST` | `/MergeEpisodes/SplitAllEpisodes` | Deep clean: split all episodes with any merge state |
+| `POST` | `/MergeEpisodes/Cancel` | Cancel the currently running operation |
+
+### Response Format
+
+Merge and split endpoints return an `OperationResult`:
+
+```json
+{
+  "Succeeded": 12,
+  "Failed": 1,
+  "FailedItems": ["Show Name S01E05"]
+}
+```
+
+If cancelled:
+
+```json
+{
+  "message": "Operation cancelled",
+  "cancelled": true
+}
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     Jellyfin Server (DI)                     │
+├──────────────────────────────────────────────────────────────┤
+│  PluginServiceRegistrator                                    │
+│    ├── ConfigurationService          (singleton)             │
+│    ├── LibraryQueryService           (singleton)             │
+│    └── IEpisodeMergeService →                                │
+│           MergeEpisodesManager       (singleton)             │
+├──────────────────────────────────────────────────────────────┤
+│  MergeEpisodesController  (REST API, RequiresElevation)      │
+│    └── IEpisodeMergeService via DI                           │
+├──────────────────────────────────────────────────────────────┤
+│  MergeEpisodesTask  (IScheduledTask, no auto triggers)       │
+│    └── IEpisodeMergeService.MergeEpisodesAsync               │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+| File | Purpose |
+|------|---------|
+| `MergeEpisodesManager.cs` | Core engine — merge/split logic with DB corruption prevention |
+| `IEpisodeMergeService.cs` | Interface for DI decoupling |
+| `LibraryQueryService.cs` | Library querying with include-path filtering |
+| `ConfigurationService.cs` | Null-safe centralized config access |
+| `MergeEpisodesTask.cs` | Jellyfin scheduled task (manual triggers only) |
+| `MergeEpisodesController.cs` | REST API (4 endpoints) |
+| `PluginServiceRegistrator.cs` | DI registration |
+| `PluginConfiguration.cs` | Config model (`LocationsIncluded`) |
+| `configPage.html` | Plugin settings UI with activity log |
+| `OperationResult.cs` | Result record type |
+
+---
+
+## 🛡️ Database Safety
+
+The plugin implements multiple safety mechanisms to prevent Jellyfin database corruption:
+
+| Mechanism | Description |
+|-----------|-------------|
+| **SemaphoreSlim Guard** | Only one merge/split operation at a time; concurrent requests wait for the current atomic unit to complete |
+| **Primary-First Writes** | The "master" episode is always saved before children, so children always reference a valid parent |
+| **CancellationToken.None for Writes** | DB writes are never abandoned mid-transaction, even during cancellation |
+| **Between-Group Cancellation** | Cancellation is checked between episode groups, never mid-group |
+| **Per-Item Resilience** | If one child fails (deleted mid-op, I/O error), remaining children are still processed |
+| **Orphaned Secondary Cleanup** | When splitting, orphaned secondary items (stale `PrimaryVersionId`) are cleaned up |
+| **Null Path Guards** | Corrupted DB entries with null paths are safely skipped |
+| **HashSet Deduplication** | Duplicate paths (e.g., symlinks) produce only one `LinkedChild` entry |
+| **Dispose Safety** | `volatile _disposed` flag + `ObjectDisposedException.ThrowIf` prevents use-after-dispose corruption |
+
+---
+
+## 🧪 Testing
 
 ```bash
 dotnet test
 ```
 
-### Test Coverage (81 tests)
+### Test Coverage — 86 Tests
 
-| Test Class | Tests | Coverage Area |
-|------------|-------|---------------|
-| `MergeEpisodesManagerTests` | 26 | Core merge/split, cancellation, corruption prevention, edge cases |
-| `EpisodeIdentityTests` | 34 | Regex identity extraction — standard, multi-ep, Jellyfin doc format, 3D, specials, year+metadata ID, case-insensitive, no-match, multi-part |
-| `ConfigurationServiceTests` | 6 | Null-safe config access, live value reflection |
-| `MergeEpisodesTaskTests` | 7 | Scheduled task flag checking, progress, metadata |
-| `LibraryQueryServiceTests` | 8 | Library querying, exclusion filtering, null path safety |
+| Test Class | Tests | Coverage |
+|------------|:-----:|----------|
+| `MergeEpisodesManagerTests` | 38 | Core merge/split, cancellation, concurrent ops, corruption prevention, dispose safety, edge cases |
+| `EpisodeIdentityTests` | 34 | Regex identity — standard, multi-ep, 3D, specials, metadata IDs, case-insensitive, no-match |
+| `LibraryQueryServiceTests` | 10 | Library querying, include-path filtering, null path safety |
+| `MergeEpisodesTaskTests` | 5 | Scheduled task metadata, progress, cancellation token wiring |
+| `ConfigurationServiceTests` | 3 | Null-safe access, default values, live value reflection |
 
 ### Key Test Scenarios
 
-**Merge:**
-- Episodes with no duplicates → no merge
-- Episodes without `SxxExx` pattern → skipped
-- Jellyfin naming conventions (year, metadata ID, 3D tags, specials)
-- Already-merged episodes → idempotent
-- Duplicate paths (symlinks) → deduplicated
-- Episode with null path → safely skipped
+- **No duplicates / no episodes / no SxxExx pattern** → zero counts, no side effects
+- **Already-merged episodes** → idempotent re-merge
+- **Duplicate paths (symlinks)** → deduplicated via HashSet
+- **Null paths / empty filenames** → safely excluded
+- **Null LinkedChild.Path (corrupted data)** → skipped without crash
+- **Item deleted between scan and merge** → graceful null handling
+- **Child update failure** → remaining children still processed
+- **Concurrent operations** → semaphore prevents overlap
+- **Rapid cancellation** → no deadlocks, no crashes
+- **Use after dispose** → `ObjectDisposedException` thrown
+- **Multiple included paths** → episodes from both are eligible
+- **Empty included paths** → nothing processed (safe default)
 
-**Split:**
-- Items deleted between scan and split → graceful handling
-- Stale linked items → per-item try/catch, doesn't abort others
+---
 
-**DB Corruption Prevention:**
-- Primary updated before children (write order)
-- Child update throws → remaining children still processed
-- Concurrent operations → semaphore guard
-- Cancellation between groups (never mid-transaction)
-- Null `LinkedChild.Path` (corrupted data) → skipped
+## ⚠️ Known Limitations
 
-**Configuration:**
-- Auto-merge flag disabled → task skips entirely
-- Auto-merge flag enabled → task calls merge service
+1. **Multi-Part Files** — Jellyfin's documentation states that multi-part files (`S01E01-part-1.mkv`, `S01E01-part-2.mkv`) do not work with merging. This plugin will incorrectly group them as the same episode because `-part-N` comes after `SxxExx`. **Do not use multi-part files with this plugin.**
+
+2. **Movies Not Supported** — Jellyfin already handles movie version merging natively. This plugin only processes TV episodes.
+
+3. **No Automatic Triggers** — The scheduled task has no default triggers. You must manually add triggers in Jellyfin's Scheduled Tasks UI or run operations from the plugin's config page.
+
+---
+
+## 🙏 Credits
+
+- Original [Merge Versions](https://github.com/danieladov/jellyfin-plugin-mergeversions) plugin by [danieladov](https://github.com/danieladov)
+- Built for the [Jellyfin](https://jellyfin.org) media system
 - Config changes reflected in real-time (no caching)
 - Null path in excluded library check → returns false (eligible)
 
