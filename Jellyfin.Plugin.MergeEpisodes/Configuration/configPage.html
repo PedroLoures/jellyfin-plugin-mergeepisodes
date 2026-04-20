@@ -490,11 +490,10 @@
 
             function getFolderHtml(currentConfig, virtualFolder, index) {
                 var html = '';
-                var includeAll = currentConfig.LocationsIncluded.length === 0;
                 for (var i = 0, length = virtualFolder.Locations.length; i < length; i++) {
                     var id = 'chkFolder' + index + '_' + i;
                     var location = virtualFolder.Locations[i];
-                    var isChecked = includeAll || currentConfig.LocationsIncluded.some(function (current) {
+                    var isChecked = currentConfig.LocationsIncluded.some(function (current) {
                         return current.toLowerCase() === location.toLowerCase();
                     });
                     var checkedAttribute = isChecked ? 'checked="checked"' : '';
