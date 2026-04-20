@@ -1,0 +1,182 @@
+name: Build & Release Plugin
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to create GitHub Releases
+
+    steps:
+      # ── 1. Checkout plugin repo ────────────────────────────────────────────
+      - name: Checkout plugin repo
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      # ── 2. Read version from Directory.Build.props ─────────────────────────
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(grep -oP '(?<=<AssemblyVersion>)[^<]+' Directory.Build.props)
+          echo "Found version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # ── 3. Setup .NET ──────────────────────────────────────────────────────
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'   # Change to your target .NET version
+
+      # ── 4. Build ───────────────────────────────────────────────────────────
+      - name: Build
+        run: dotnet build --configuration Release
+
+      # ── 5. Find the built .dll ─────────────────────────────────────────────
+      # Searches for the main plugin DLL (ignores test/deps DLLs).
+      # If your DLL name is predictable, replace the find with a direct path.
+      - name: Locate DLL
+        id: dll
+        run: |
+          DLL_PATH=$(find . -path "*/bin/Release/*/*.dll" \
+            ! -name "*.deps.dll" \
+            ! -path "*/Test*" \
+            ! -path "*/test*" \
+            | head -n 1)
+          echo "Found DLL: $DLL_PATH"
+          echo "dll_path=$DLL_PATH" >> $GITHUB_OUTPUT
+
+      # ── 6. Generate meta.json ──────────────────────────────────────────────
+      # Edit the static fields (guid, name, description, etc.) to match your plugin.
+      # version, timestamp, and checksum are filled in automatically.
+      - name: Generate meta.json
+        id: meta
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          VERSION="${{ steps.version.outputs.version }}"
+          CHECKSUM=$(md5sum "${{ steps.dll.outputs.dll_path }}" | awk '{print toupper($1)}')
+
+          # Collect recent commit messages for changelog
+          CHANGELOG=$(git log --pretty=format:"%s" -10 \
+            | jq -R . | jq -s . | jq -c .)
+
+          cat > meta.json <<EOF
+          {
+            "category": "General",
+            "changelog": $CHANGELOG,
+            "description": "Jellyfin Merge Episodes plugin is a plugin that automatically groups every repeated episode\n",
+            "guid": "c5315368-51cd-4efd-b930-a9bef8a9e44f",
+            "imageUrl": "https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/main/resources/MergeEpisodes/ai-thumb2.png",
+            "name": "Merge Episodes",
+            "overview": "Automatically merge repeated episodes. Rewritten based on danielapov Merge Versions for 10.11.0.1",
+            "owner": "${{ github.repository_owner }}",
+            "targetAbi": "10.11.0.0",
+            "timestamp": "$TIMESTAMP",
+            "version": "$VERSION"
+          }
+          EOF
+
+          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+          cat meta.json
+
+      # ── 7. Package .dll + meta.json into a .zip ────────────────────────────
+      - name: Package zip
+        run: |
+          mkdir -p dist
+          cp "${{ steps.dll.outputs.dll_path }}" dist/
+          cp meta.json dist/
+          cd dist
+          ZIP_NAME="plugin-${{ steps.version.outputs.version }}.zip"
+          zip -j "../$ZIP_NAME" ./*
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      # ── 8. Create GitHub Release and upload the zip ────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "v${{ steps.version.outputs.version }}"
+          files: ${{ env.ZIP_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 9. Update manifest in your separate manifest repo ─────────────────
+      - name: Checkout manifest repo
+        uses: actions/checkout@v4
+        with:
+          # Set this secret in your plugin repo:
+          # Settings → Secrets → Actions → New repository secret
+          # Name: JELLYFIN_MANIFEST_REPO_TOKEN
+          # Value: a GitHub PAT with repo scope on your manifest repo
+          ref: main
+          token: ${{ secrets.JELLYFIN_MANIFEST_REPO_TOKEN }}
+          repository: PedroLoures/JellyfinPluginManifest
+          path: manifest-repo
+
+      - name: Update manifest.json
+        run: |
+          MANIFEST="manifest-repo/manifest.json"
+          VERSION="${{ steps.version.outputs.version }}"
+          TIMESTAMP="${{ steps.meta.outputs.timestamp }}"
+          CHECKSUM="${{ steps.meta.outputs.checksum }}"
+          PLUGIN_GUID="c5315368-51cd-4efd-b930-a9bef8a9e44f"
+
+          # Build the source URL pointing at the release asset we just uploaded
+          SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/plugin-${VERSION}.zip"
+
+          # Collect recent commit messages for changelog
+          CHANGELOG=$(git log --pretty=format:"%s" -10 \
+            | jq -R . | jq -s . | jq -c . )
+
+          NEW_VERSION_ENTRY=$(jq -n \
+            --arg version    "$VERSION" \
+            --argjson changelog "$CHANGELOG" \
+            --arg targetAbi  "10.11.0.0" \
+            --arg sourceUrl  "$SOURCE_URL" \
+            --arg checksum   "$CHECKSUM" \
+            --arg timestamp  "$TIMESTAMP" \
+            '{version: $version, changelog: $changelog, targetAbi: $targetAbi, sourceUrl: $sourceUrl, checksum: $checksum, timestamp: $timestamp}')
+
+          # Find the plugin entry by guid and prepend the new version to its versions array.
+          # If the guid doesn't exist yet, a new entry is appended automatically.
+          jq --arg guid "$PLUGIN_GUID" \
+             --argjson newEntry "$NEW_VERSION_ENTRY" \
+            '
+              # Check if plugin already exists
+              if any(.[]; .guid == $guid) then
+                map(
+                  if .guid == $guid then
+                    .versions = [$newEntry] + .versions
+                  else . end
+                )
+              else
+                # Plugin not in manifest yet — add a skeleton entry
+                . + [{
+                  "guid": $guid,
+                  "name": "Merge Episodes",
+                  "description": "Jellyfin Merge Episodes plugin is a plugin that automatically groups every repeated episode\n",
+                  "overview": "Automatically merge repeated episodes. Rewritten based on danielapov Merge Versions for 10.11.0.1",
+                  "owner": "${{ github.repository_owner }}",
+                  "imageUrl": "https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/main/resources/MergeEpisodes/ai-thumb2.png",
+                  "category": "General",
+                  "versions": [$newEntry]
+                }]
+              end
+            ' "$MANIFEST" > tmp.json && mv tmp.json "$MANIFEST"
+
+          echo "Updated manifest.json:"
+          cat "$MANIFEST"
+
+      - name: Commit & push manifest update
+        run: |
+          cd manifest-repo
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "chore: add plugin v${{ steps.version.outputs.version }}"
+          git push
