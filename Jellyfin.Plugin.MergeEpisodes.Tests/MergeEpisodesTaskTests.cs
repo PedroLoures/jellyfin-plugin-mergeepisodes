@@ -35,30 +35,9 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
 
         public MergeEpisodesTaskTests()
         {
-            EnsurePluginInstance();
+            TestHelpers.EnsurePluginInstance();
             _logger = new Mock<ILogger<MergeEpisodesTask>>();
             _mergeService = new Mock<IEpisodeMergeService>();
-        }
-
-        private static void EnsurePluginInstance()
-        {
-            if (Plugin.Instance != null)
-            {
-                return;
-            }
-
-            var appPaths = new Mock<MediaBrowser.Controller.IServerApplicationPaths>();
-            var tempPath = Path.GetTempPath();
-            appPaths.SetupGet(p => p.PluginConfigurationsPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.PluginsPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.DataPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.ConfigurationDirectoryPath).Returns(tempPath);
-            var xmlSerializer = new Mock<MediaBrowser.Model.Serialization.IXmlSerializer>();
-            xmlSerializer
-                .Setup(x => x.DeserializeFromFile(It.IsAny<Type>(), It.IsAny<string>()))
-                .Returns(new Configuration.PluginConfiguration());
-
-            _ = new Plugin(appPaths.Object, xmlSerializer.Object);
         }
 
         // ── Execution ───────────────────────────────────────────────────────────
@@ -100,6 +79,36 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             await task.ExecuteAsync(progress, CancellationToken.None);
 
             Assert.NotNull(capturedProgress);
+        }
+
+        /// <summary>
+        /// When Jellyfin cancels the task via its CancellationToken,
+        /// the task should forward that to CancelRunningOperation on the service.
+        /// </summary>
+        [Fact]
+        public async Task ExecuteAsync_CancellationToken_CallsCancelRunningOperation()
+        {
+            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object);
+
+            using var cts = new CancellationTokenSource();
+
+            // Make MergeEpisodesAsync block until we cancel
+            var tcs = new TaskCompletionSource<OperationResult>();
+            _mergeService
+                .Setup(s => s.MergeEpisodesAsync(It.IsAny<IProgress<double>?>()))
+                .Returns(tcs.Task);
+
+            var executeTask = task.ExecuteAsync(new Progress<double>(), cts.Token);
+
+            // Cancel the framework token
+            cts.Cancel();
+
+            // CancelRunningOperation should have been called via the token registration
+            _mergeService.Verify(s => s.CancelRunningOperation(), Times.Once);
+
+            // Let the task complete
+            tcs.SetResult(new OperationResult(0, 0, new List<string>().AsReadOnly()));
+            await executeTask;
         }
 
         // ── Task Metadata ───────────────────────────────────────────────────────

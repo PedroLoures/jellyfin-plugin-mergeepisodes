@@ -29,35 +29,14 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         /// </summary>
         public ConfigurationServiceTests()
         {
-            EnsurePluginInstance();
-        }
-
-        private static void EnsurePluginInstance()
-        {
-            if (Plugin.Instance != null)
-            {
-                return;
-            }
-
-            var appPaths = new Mock<MediaBrowser.Controller.IServerApplicationPaths>();
-            var tempPath = Path.GetTempPath();
-            appPaths.SetupGet(p => p.PluginConfigurationsPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.PluginsPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.DataPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.ConfigurationDirectoryPath).Returns(tempPath);
-            var xmlSerializer = new Mock<MediaBrowser.Model.Serialization.IXmlSerializer>();
-            xmlSerializer
-                .Setup(x => x.DeserializeFromFile(It.IsAny<Type>(), It.IsAny<string>()))
-                .Returns(new Configuration.PluginConfiguration());
-
-            _ = new Plugin(appPaths.Object, xmlSerializer.Object);
+            TestHelpers.EnsurePluginInstance();
         }
 
         // ── LocationsIncluded ───────────────────────────────────────────────────
 
         /// <summary>
         /// Verifies that LocationsIncluded defaults to an empty list,
-        /// meaning all libraries are included for merging.
+        /// meaning nothing is included (user must select paths after install).
         /// </summary>
         [Fact]
         public void LocationsIncluded_DefaultsToEmptyList()

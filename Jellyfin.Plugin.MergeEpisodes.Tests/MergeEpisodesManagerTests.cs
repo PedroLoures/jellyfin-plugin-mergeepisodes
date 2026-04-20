@@ -65,10 +65,8 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             _logger = new Mock<ILogger<MergeEpisodesManager>>();
             _fileSystem = new Mock<IFileSystem>();
 
-            // Plugin.Instance is required by library inclusion checks — we need to set it up.
-            // Create a minimal plugin mock via reflection since the constructor requires
-            // IServerApplicationPaths + IXmlSerializer. We'll use a helper to bypass this.
-            EnsurePluginInstance();
+            // Plugin.Instance is required by library inclusion checks.
+            TestHelpers.EnsurePluginInstance();
 
             // Configure /tv as an included library path so test episodes are eligible.
             // This is just test data — production code works with any path (/anime, /cartoon, etc.).
@@ -92,28 +90,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             );
         }
 
-        private static void EnsurePluginInstance()
-        {
-            // If Plugin.Instance is already set from a previous test, skip.
-            if (Plugin.Instance != null)
-            {
-                return;
-            }
 
-            var appPaths = new Mock<MediaBrowser.Controller.IServerApplicationPaths>();
-            var tempPath = Path.GetTempPath();
-            appPaths.SetupGet(p => p.PluginConfigurationsPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.PluginsPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.DataPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.ConfigurationDirectoryPath).Returns(tempPath);
-            var xmlSerializer = new Mock<MediaBrowser.Model.Serialization.IXmlSerializer>();
-            xmlSerializer
-                .Setup(x => x.DeserializeFromFile(It.IsAny<Type>(), It.IsAny<string>()))
-                .Returns(new Configuration.PluginConfiguration());
-
-            // This constructor sets Plugin.Instance = this
-            _ = new Plugin(appPaths.Object, xmlSerializer.Object);
-        }
 
         /// <summary>
         /// Factory method for creating test Episode instances with controllable properties.

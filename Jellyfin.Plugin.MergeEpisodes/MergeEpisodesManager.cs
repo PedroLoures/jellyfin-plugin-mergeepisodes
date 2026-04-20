@@ -397,7 +397,19 @@ namespace Jellyfin.Plugin.MergeEpisodes
                     return;
                 }
 
-                item = _libraryManager.GetItemById<Video>(primaryId);
+                var primary = _libraryManager.GetItemById<Video>(primaryId);
+                if (primary is null)
+                {
+                    // Primary was deleted — clear the orphaned secondary's back-reference
+                    // so it becomes a standalone episode again.
+                    item.SetPrimaryVersionId(null);
+                    await item.UpdateToRepositoryAsync(
+                        ItemUpdateType.MetadataEdit, CancellationToken.None)
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                item = primary;
             }
 
             if (item is null)

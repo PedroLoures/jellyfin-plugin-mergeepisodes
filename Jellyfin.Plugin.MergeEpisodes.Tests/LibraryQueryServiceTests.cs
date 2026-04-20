@@ -41,7 +41,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
 
         public LibraryQueryServiceTests()
         {
-            EnsurePluginInstance();
+            TestHelpers.EnsurePluginInstance();
             _libraryManager = new Mock<ILibraryManager>();
             _fileSystem = new Mock<IFileSystem>();
             _logger = new Mock<ILogger<LibraryQueryService>>();
@@ -50,27 +50,6 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
                 _fileSystem.Object,
                 new ConfigurationService(),
                 _logger.Object);
-        }
-
-        private static void EnsurePluginInstance()
-        {
-            if (Plugin.Instance != null)
-            {
-                return;
-            }
-
-            var appPaths = new Mock<MediaBrowser.Controller.IServerApplicationPaths>();
-            var tempPath = Path.GetTempPath();
-            appPaths.SetupGet(p => p.PluginConfigurationsPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.PluginsPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.DataPath).Returns(tempPath);
-            appPaths.SetupGet(p => p.ConfigurationDirectoryPath).Returns(tempPath);
-            var xmlSerializer = new Mock<MediaBrowser.Model.Serialization.IXmlSerializer>();
-            xmlSerializer
-                .Setup(x => x.DeserializeFromFile(It.IsAny<Type>(), It.IsAny<string>()))
-                .Returns(new Configuration.PluginConfiguration());
-
-            _ = new Plugin(appPaths.Object, xmlSerializer.Object);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
