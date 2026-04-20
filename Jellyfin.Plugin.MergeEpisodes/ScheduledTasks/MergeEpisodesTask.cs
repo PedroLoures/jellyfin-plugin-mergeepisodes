@@ -46,6 +46,10 @@ namespace Jellyfin.Plugin.MergeEpisodes.ScheduledTasks
         {
             _logger.LogInformation("Starting scheduled merge episodes task");
 
+            // Wire the framework's cancellation token to the merge service so
+            // Jellyfin can stop this task through its normal mechanism.
+            using var registration = cancellationToken.Register(() => _mergeService.CancelRunningOperation());
+
             var result = await _mergeService.MergeEpisodesAsync(progress).ConfigureAwait(false);
 
             _logger.LogInformation(

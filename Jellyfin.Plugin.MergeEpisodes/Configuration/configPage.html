@@ -298,6 +298,10 @@
                 document.querySelector('#activity-log').innerHTML = '<span class="me-empty-hint">No activity yet.</span>';
             }
 
+            function escapeHtml(str) {
+                return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
             function formatElapsed(ms) {
                 var secs = Math.floor(ms / 1000);
                 var mins = Math.floor(secs / 60);
@@ -363,9 +367,12 @@
                     var failDiv = document.querySelector('#result-failures');
                     if (data.FailedItems && data.FailedItems.length > 0) {
                         var list = document.querySelector('#result-failure-list');
-                        list.innerHTML = data.FailedItems.map(function (item) {
-                            return '<li>' + item + '</li>';
-                        }).join('');
+                        list.innerHTML = '';
+                        data.FailedItems.forEach(function (item) {
+                            var li = document.createElement('li');
+                            li.textContent = item;
+                            list.appendChild(li);
+                        });
                         failDiv.style.display = 'block';
                     } else {
                         failDiv.style.display = 'none';
@@ -393,7 +400,7 @@
                             logEntry(operationName + ' completed: <strong>' + data.Succeeded + '</strong> succeeded, <strong>' + data.Failed + '</strong> failed. (' + elapsed + ')', cls);
                             if (data.FailedItems && data.FailedItems.length > 0) {
                                 data.FailedItems.forEach(function (item) {
-                                    logEntry('&nbsp;&nbsp;&#10007; ' + item, 'me-err');
+                                    logEntry('&nbsp;&nbsp;&#10007; ' + escapeHtml(item), 'me-err');
                                 });
                             }
                         }
