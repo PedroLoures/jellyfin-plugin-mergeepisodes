@@ -14,18 +14,22 @@ namespace Jellyfin.Plugin.MergeEpisodes.ScheduledTasks
     {
         private readonly ILogger<MergeEpisodesTask> _logger;
         private readonly IEpisodeMergeService _mergeService;
+        private readonly ConfigurationService _configService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MergeEpisodesTask"/> class.
         /// </summary>
         /// <param name="logger">Instance of the <see cref="ILogger{MergeEpisodesTask}"/> interface.</param>
         /// <param name="mergeService">Instance of the <see cref="IEpisodeMergeService"/> interface.</param>
+        /// <param name="configService">Instance of the <see cref="ConfigurationService"/> class.</param>
         public MergeEpisodesTask(
             ILogger<MergeEpisodesTask> logger,
-            IEpisodeMergeService mergeService)
+            IEpisodeMergeService mergeService,
+            ConfigurationService configService)
         {
             _logger = logger;
             _mergeService = mergeService;
+            _configService = configService;
         }
 
         /// <inheritdoc/>
@@ -43,7 +47,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.ScheduledTasks
         /// <inheritdoc/>
         public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            if (Plugin.Instance?.Configuration.AutoMergeAfterLibraryScan != true)
+            if (!_configService.AutoMergeAfterLibraryScan)
             {
                 _logger.LogDebug("Automatic merge after library scan is disabled, skipping");
                 progress.Report(100);

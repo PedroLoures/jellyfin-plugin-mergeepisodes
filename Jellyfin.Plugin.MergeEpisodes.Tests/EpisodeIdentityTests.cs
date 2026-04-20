@@ -1,9 +1,31 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EpisodeIdentityTests.cs
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tests for the episode identity extraction regex — the foundation of the merge
+// logic. The "base identity" is everything in a filename up to and including the
+// SxxExx identifier (e.g., "Show Name S01E01"). Quality tags, codec info, and
+// episode titles that follow are stripped, so different versions of the same
+// episode produce the same identity and get grouped for merging.
+//
+// Supported patterns:
+//   • Standard: "Show S01E01 - 720p.mkv" → "Show S01E01"
+//   • Multi-episode: "Show S01E01E02 - 720p.mkv" → "Show S01E01E02"
+//   • Dash multi: "Show S01E01-E02 - 720p.mkv" → "Show S01E01-E02"
+//   • N-separator: "Show S01E01n02 - 720p.mkv" → "Show S01E01n02"
+//   • Case-insensitive: "show s01e01" matches "Show S01E01"
+//   • No match: files without SxxExx → null (skipped during merge)
+// ═══════════════════════════════════════════════════════════════════════════════
+
 using System;
 using MediaBrowser.Controller.Entities.TV;
 using Xunit;
 
 namespace Jellyfin.Plugin.MergeEpisodes.Tests
 {
+    /// <summary>
+    /// Tests for <see cref="MergeEpisodesManager.GetBaseIdentity"/> — the regex-based
+    /// identity extractor that determines which episodes are "the same" and should be merged.
+    /// </summary>
     public class EpisodeIdentityTests
     {
         private static Episode CreateEpisode(string path)

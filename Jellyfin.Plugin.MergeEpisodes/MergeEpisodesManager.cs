@@ -33,6 +33,8 @@ namespace Jellyfin.Plugin.MergeEpisodes
         private readonly ILibraryManager _libraryManager;
         private readonly ILogger<MergeEpisodesManager> _logger;
         private readonly IFileSystem _fileSystem;
+        private readonly ConfigurationService _configService;
+        private readonly LibraryQueryService _queryService;
 
         private CancellationTokenSource? _cts;
 
@@ -42,14 +44,20 @@ namespace Jellyfin.Plugin.MergeEpisodes
         /// <param name="libraryManager">The library manager.</param>
         /// <param name="logger">The logger.</param>
         /// <param name="fileSystem">The file system.</param>
+        /// <param name="configService">The configuration service.</param>
+        /// <param name="queryService">The library query service.</param>
         public MergeEpisodesManager(
             ILibraryManager libraryManager,
             ILogger<MergeEpisodesManager> logger,
-            IFileSystem fileSystem)
+            IFileSystem fileSystem,
+            ConfigurationService configService,
+            LibraryQueryService queryService)
         {
             _libraryManager = libraryManager;
             _logger = logger;
             _fileSystem = fileSystem;
+            _configService = configService;
+            _queryService = queryService;
         }
 
         /// <inheritdoc />
@@ -105,7 +113,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
             var cancellationToken = await BeginOperationAsync().ConfigureAwait(false);
             _logger.LogInformation("Scanning for repeated episodes");
 
-            var duplicateEpisodes = GetEpisodesFromLibrary()
+            var duplicateEpisodes = _queryService.GetEligibleEpisodes()
                 .GroupBy(e => GetBaseIdentity(e), StringComparer.OrdinalIgnoreCase)
                 .Where(g => g.Key is not null && g.Count() > 1)
                 .ToList();
@@ -166,7 +174,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
 
             // Only target primary versions
             // so processing secondary items would be redundant lookups.
-            var primaryEpisodes = GetEpisodesFromLibrary()
+            var primaryEpisodes = _queryService.GetEligibleEpisodes()
                 .Where(e => e.LinkedAlternateVersions.Length > 0)
                 .ToList();
 
@@ -185,7 +193,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
         {
             var cancellationToken = await BeginOperationAsync().ConfigureAwait(false);
 
-            var allMergedEpisodes = GetEpisodesFromLibrary()
+            var allMergedEpisodes = _queryService.GetEligibleEpisodes()
                 .Where(e => e.LinkedAlternateVersions.Length > 0 || e.PrimaryVersionId != null)
                 .ToList();
 
@@ -266,20 +274,6 @@ namespace Jellyfin.Plugin.MergeEpisodes
                 failedItems.Count);
             progress?.Report(100);
             return new OperationResult(succeeded, failedItems.Count, failedItems.AsReadOnly());
-        }
-
-        private List<Episode> GetEpisodesFromLibrary()
-        {
-            return _libraryManager
-                .GetItemList(new InternalItemsQuery
-                {
-                    IncludeItemTypes = [BaseItemKind.Episode],
-                    IsVirtualItem = false,
-                    Recursive = true,
-                })
-                .OfType<Episode>()
-                .Where(IsEligible)
-                .ToList();
         }
 
         private async Task MergeEpisodeVersions(List<Guid> ids)
@@ -415,18 +409,6 @@ namespace Jellyfin.Plugin.MergeEpisodes
                     ItemUpdateType.MetadataEdit,
                     CancellationToken.None).ConfigureAwait(false);
             }
-        }
-
-        private bool IsEligible(BaseItem item)
-        {
-            return !IsInExcludedLibrary(item);
-        }
-
-        private bool IsInExcludedLibrary(BaseItem item)
-        {
-            return Plugin.Instance?.Configuration.LocationsExcluded != null
-                   && Plugin.Instance.Configuration.LocationsExcluded
-                     .Any(s => _fileSystem.ContainsSubPath(s, item.Path));
         }
     }
 }

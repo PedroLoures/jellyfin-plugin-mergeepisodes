@@ -12,6 +12,8 @@ namespace Jellyfin.Plugin.MergeEpisodes
         /// <inheritdoc />
         public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
         {
+            serviceCollection.AddSingleton<ConfigurationService>();
+            serviceCollection.AddSingleton<LibraryQueryService>();
             serviceCollection.AddSingleton<IEpisodeMergeService, MergeEpisodesManager>();
         }
     }

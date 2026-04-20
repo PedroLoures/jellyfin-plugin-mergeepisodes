@@ -1,3 +1,36 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// MergeEpisodesManagerTests.cs
+// ═══════════════════════════════════════════════════════════════════════════════
+// Comprehensive test suite for the MergeEpisodesManager — the core engine of
+// the Merge Episodes plugin. This class is responsible for:
+//
+//   • Detecting duplicate episodes by extracting a "base identity" from file paths
+//     (e.g., "Show S01E01" from "Show S01E01 720p.mkv" and "Show S01E01 1080p.mkv")
+//   • Merging duplicates into a single episode entry with multiple versions
+//   • Splitting previously-merged episodes back into individual entries
+//   • Cancellation support (cancel between groups, never mid-transaction)
+//   • Database corruption prevention via:
+//       - SemaphoreSlim _operationGuard for atomic write blocks
+//       - Primary-first write ordering (the "master" episode is saved before children)
+//       - CancellationToken.None for all database writes (never abandon a write)
+//   • Library exclusion support (skip episodes in user-configured locations)
+//
+// Test categories:
+//   1. Merge — basic merge scenarios (no duplicates, no episodes, no SxxExx pattern)
+//   2. Progress reporting — verifies IProgress<double> callbacks
+//   3. Split — splitting merged episodes back to individual items
+//   4. Cancellation — CancelRunningOperation behavior and safety
+//   5. OperationResult — record type correctness
+//   6. Database corruption prevention — primary-first writes, concurrent calls,
+//      graceful failure handling, atomic group completion
+//   7. Edge cases — already-merged items, excluded libraries, deleted items,
+//      duplicate paths, identity delegation
+//
+// NOTE: Some behaviors cannot be fully unit-tested because Jellyfin's Episode
+// class has non-virtual members (LinkedAlternateVersions, UpdateToRepositoryAsync).
+// These are documented inline where relevant.
+// ═══════════════════════════════════════════════════════════════════════════════
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,6 +48,10 @@ using Xunit;
 
 namespace Jellyfin.Plugin.MergeEpisodes.Tests
 {
+    /// <summary>
+    /// Tests for <see cref="MergeEpisodesManager"/>, covering merge/split operations,
+    /// cancellation, database corruption prevention, and edge case handling.
+    /// </summary>
     public class MergeEpisodesManagerTests
     {
         private readonly Mock<ILibraryManager> _libraryManager;
@@ -36,7 +73,13 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             _manager = new MergeEpisodesManager(
                 _libraryManager.Object,
                 _logger.Object,
-                _fileSystem.Object
+                _fileSystem.Object,
+                new ConfigurationService(),
+                new LibraryQueryService(
+                    _libraryManager.Object,
+                    _fileSystem.Object,
+                    new ConfigurationService(),
+                    new Mock<ILogger<LibraryQueryService>>().Object)
             );
         }
 
@@ -63,6 +106,10 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             _ = new Plugin(appPaths.Object, xmlSerializer.Object);
         }
 
+        /// <summary>
+        /// Factory method for creating test Episode instances with controllable properties.
+        /// Sets Id, Path, LinkedAlternateVersions, and optionally PrimaryVersionId.
+        /// </summary>
         private static Episode CreateTestEpisode(Guid id, string path, string? primaryVersionId = null, LinkedChild[]? linkedAlternates = null)
         {
             var ep = new Episode
@@ -80,6 +127,10 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             return ep;
         }
 
+        /// <summary>
+        /// Configures the mocked ILibraryManager.GetItemList to return the given episodes.
+        /// This simulates what Jellyfin returns when the manager queries for all episodes.
+        /// </summary>
         private void SetupLibraryReturns(params Episode[] episodes)
         {
             _libraryManager
@@ -87,7 +138,10 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
                 .Returns(episodes.Cast<BaseItem>().ToList());
         }
 
-        // ── MergeEpisodesAsync ──────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════
+        // SECTION: MergeEpisodesAsync — Core merge operation tests
+        // Verifies episode grouping, identity extraction, and merge behavior.
+        // ═══════════════════════════════════════════════════════════════════
 
         [Fact]
         public async Task MergeEpisodesAsync_NoDuplicates_ReturnsZeroCounts()
@@ -154,7 +208,10 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             Assert.Contains(100.0, progressValues);
         }
 
-        // ── SplitEpisodesAsync ──────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════
+        // SECTION: SplitEpisodesAsync — Splitting merged episodes
+        // Verifies that split operations handle empty/missing data gracefully.
+        // ═══════════════════════════════════════════════════════════════════
 
         [Fact]
         public async Task SplitEpisodesAsync_NoMergedEpisodes_ReturnsZeroCounts()
@@ -181,7 +238,11 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         //   - SplitAllEpisodesAsync targets both primary and secondary items
         //     (LinkedAlternateVersions.Length > 0 OR PrimaryVersionId != null).
 
-        // ── Cancellation ────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════
+        // SECTION: Cancellation — CancelRunningOperation behavior
+        // The plugin supports cancellation BETWEEN groups (never mid-write).
+        // These tests verify the operation cancels safely without corruption.
+        // ═══════════════════════════════════════════════════════════════════
 
         [Fact]
         public async Task MergeEpisodesAsync_CancellationThrows()
@@ -217,7 +278,10 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             Assert.Null(ex);
         }
 
-        // ── OperationResult ─────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════
+        // SECTION: OperationResult — Result record type
+        // Verifies the OperationResult record holds correct data.
+        // ═══════════════════════════════════════════════════════════════════
 
         [Fact]
         public void OperationResult_RecordEquality()
@@ -228,7 +292,15 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             Assert.Equal(2, a.FailedItems.Count);
         }
 
-        // ── Database Corruption Prevention ──────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════
+        // SECTION: Database Corruption Prevention
+        // These tests verify the safety mechanisms that prevent Jellyfin's
+        // database from being corrupted during merge/split operations:
+        //   • Primary episode is written FIRST (so children always have a parent)
+        //   • SemaphoreSlim ensures no two operations overlap
+        //   • Failures in one group don't affect other groups
+        //   • Rapid cancellation doesn't cause deadlocks or crashes
+        // ═══════════════════════════════════════════════════════════════════
 
         [Fact]
         public async Task MergeEpisodesAsync_PrimaryIsUpdatedBeforeChildren()
@@ -468,7 +540,13 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             var manager = new MergeEpisodesManager(
                 _libraryManager.Object,
                 _logger.Object,
-                _fileSystem.Object);
+                _fileSystem.Object,
+                new ConfigurationService(),
+                new LibraryQueryService(
+                    _libraryManager.Object,
+                    _fileSystem.Object,
+                    new ConfigurationService(),
+                    new Mock<ILogger<LibraryQueryService>>().Object));
 
             var ex = Record.Exception(() =>
             {

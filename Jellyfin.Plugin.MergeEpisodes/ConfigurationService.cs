@@ -1,0 +1,27 @@
+using Jellyfin.Plugin.MergeEpisodes.Configuration;
+
+namespace Jellyfin.Plugin.MergeEpisodes
+{
+    /// <summary>
+    /// Service for accessing plugin configuration with null-safe fallback.
+    /// </summary>
+    public class ConfigurationService
+    {
+        private static readonly PluginConfiguration DefaultConfig = new();
+
+        /// <summary>
+        /// Gets the current plugin configuration, or a default instance if unavailable.
+        /// </summary>
+        private PluginConfiguration Config => Plugin.Instance?.Configuration ?? DefaultConfig;
+
+        /// <summary>
+        /// Gets a value indicating whether automatic merging after library scans is enabled.
+        /// </summary>
+        public bool AutoMergeAfterLibraryScan => Config.AutoMergeAfterLibraryScan;
+
+        /// <summary>
+        /// Gets the library locations excluded from merging.
+        /// </summary>
+        public System.Collections.Generic.IList<string> LocationsExcluded => Config.LocationsExcluded;
+    }
+}
