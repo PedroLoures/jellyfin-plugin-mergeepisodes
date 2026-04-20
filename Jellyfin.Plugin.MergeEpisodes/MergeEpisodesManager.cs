@@ -300,11 +300,11 @@ namespace Jellyfin.Plugin.MergeEpisodes
                 StringComparer.OrdinalIgnoreCase);
 
             var alternateVersionsOfPrimary = primaryVersion
-                .LinkedAlternateVersions.Where(l => itemPaths.Contains(l.Path))
+                .LinkedAlternateVersions.Where(l => l.Path is not null && itemPaths.Contains(l.Path))
                 .ToList();
 
             var knownPaths = new HashSet<string>(
-                alternateVersionsOfPrimary.Select(l => l.Path),
+                alternateVersionsOfPrimary.Select(l => l.Path!),
                 StringComparer.OrdinalIgnoreCase);
 
             var itemsToLink = items.Where(i =>
@@ -327,7 +327,7 @@ namespace Jellyfin.Plugin.MergeEpisodes
 
                 foreach (var linkedItem in item.LinkedAlternateVersions)
                 {
-                    if (knownPaths.Add(linkedItem.Path))
+                    if (linkedItem.Path is not null && knownPaths.Add(linkedItem.Path))
                     {
                         alternateVersionsOfPrimary.Add(linkedItem);
                     }
@@ -342,19 +342,27 @@ namespace Jellyfin.Plugin.MergeEpisodes
                 .ConfigureAwait(false);
 
             // STEP 2: Now set PrimaryVersionId on children and clear their own linked lists.
+            // Each child is updated independently — one failure must not prevent the rest.
             foreach (var item in itemsToLink)
             {
-                item.SetPrimaryVersionId(
-                    primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture));
-
-                if (item.LinkedAlternateVersions.Length > 0)
+                try
                 {
-                    item.LinkedAlternateVersions = [];
-                }
+                    item.SetPrimaryVersionId(
+                        primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture));
 
-                await item.UpdateToRepositoryAsync(
-                    ItemUpdateType.MetadataEdit,
-                    CancellationToken.None).ConfigureAwait(false);
+                    if (item.LinkedAlternateVersions.Length > 0)
+                    {
+                        item.LinkedAlternateVersions = [];
+                    }
+
+                    await item.UpdateToRepositoryAsync(
+                        ItemUpdateType.MetadataEdit,
+                        CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to set PrimaryVersionId on child item {Id}", item.Id);
+                }
             }
         }
 

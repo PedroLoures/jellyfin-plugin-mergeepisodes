@@ -191,5 +191,50 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
 
             Assert.True(_service.IsEligible(ep));
         }
+
+        /// <summary>
+        /// An item with a null Path (corrupted or virtual) should not be considered excluded
+        /// and must not throw a NullReferenceException in ContainsSubPath.
+        /// </summary>
+        [Fact]
+        public void IsInExcludedLibrary_NullPath_ReturnsFalse()
+        {
+            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsExcluded.Add("/excluded");
+
+            var ep = new Episode { Id = Guid.NewGuid(), Path = null! };
+
+            // Should return false (not excluded) rather than throwing
+            Assert.False(_service.IsInExcludedLibrary(ep));
+
+            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+        }
+
+        /// <summary>
+        /// GetEligibleEpisodes should not crash if the library returns episodes with null paths.
+        /// </summary>
+        [Fact]
+        public void GetEligibleEpisodes_EpisodeWithNullPath_DoesNotThrow()
+        {
+            Plugin.Instance!.Configuration.LocationsExcluded.Clear();
+            Plugin.Instance.Configuration.LocationsExcluded.Add("/excluded");
+
+            var ep1 = new Episode { Id = Guid.NewGuid(), Path = null! };
+            var ep2 = new Episode { Id = Guid.NewGuid(), Path = "/tv/Show S01E01.mkv" };
+
+            _libraryManager
+                .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+                .Returns(new List<BaseItem> { ep1, ep2 });
+
+            _fileSystem
+                .Setup(fs => fs.ContainsSubPath(It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(false);
+
+            // Should not throw; both episodes are eligible (null path is not "excluded")
+            var result = _service.GetEligibleEpisodes();
+            Assert.Equal(2, result.Count);
+
+            Plugin.Instance.Configuration.LocationsExcluded.Clear();
+        }
     }
 }

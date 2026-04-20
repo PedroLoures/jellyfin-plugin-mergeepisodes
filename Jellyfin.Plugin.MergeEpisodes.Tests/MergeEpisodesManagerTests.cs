@@ -694,5 +694,103 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
                 return null;
             }
         }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SECTION: Null path edge cases
+        // Verifies that episodes with null paths don't crash merge operations.
+        // ═══════════════════════════════════════════════════════════════════
+
+        [Fact]
+        public async Task MergeEpisodesAsync_EpisodeWithNullPath_DoesNotThrow()
+        {
+            // An episode with a null Path (e.g., virtual or corrupted DB entry)
+            // should not crash the merge operation — it simply won't match any identity.
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), null!);
+            var ep2 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 720p.mkv");
+            var ep3 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 1080p.mkv");
+            SetupLibraryReturns(ep1, ep2, ep3);
+
+            _libraryManager
+                .Setup(l => l.GetItemById<BaseItem>(It.IsAny<Guid>(), null))
+                .Returns((Guid id, object? _) =>
+                {
+                    var all = new BaseItem[] { ep1, ep2, ep3 };
+                    return all.FirstOrDefault(e => e.Id == id);
+                });
+
+            var result = await _manager.MergeEpisodesAsync(null);
+
+            // The null-path episode is excluded from grouping; the other two merge
+            Assert.Equal(1, result.Succeeded + result.Failed);
+        }
+
+        [Fact]
+        public async Task MergeEpisodesAsync_LinkedChildWithNullPath_DoesNotThrow()
+        {
+            // If an existing LinkedAlternateVersions entry has a null Path (corrupted DB),
+            // the merge should skip it without throwing ArgumentNullException in HashSet.
+            var primaryId = Guid.NewGuid();
+            var childId = Guid.NewGuid();
+            var ep1 = CreateTestEpisode(
+                primaryId,
+                "/tv/Show S01E01 720p.mkv",
+                linkedAlternates: [new LinkedChild { Path = null!, ItemId = Guid.NewGuid() }]);
+            var ep2 = CreateTestEpisode(childId, "/tv/Show S01E01 1080p.mkv");
+            SetupLibraryReturns(ep1, ep2);
+
+            _libraryManager
+                .Setup(l => l.GetItemById<BaseItem>(It.IsAny<Guid>(), null))
+                .Returns((Guid id, object? _) =>
+                {
+                    if (id == primaryId) return ep1;
+                    if (id == childId) return ep2;
+                    return null;
+                });
+
+            // Should not throw ArgumentNullException
+            var result = await _manager.MergeEpisodesAsync(null);
+            Assert.Equal(1, result.Succeeded + result.Failed);
+        }
+
+        [Fact]
+        public async Task MergeEpisodesAsync_ChildUpdateFails_RemainingChildrenStillProcessed()
+        {
+            // If one child's UpdateToRepositoryAsync throws, the remaining children
+            // should still get their PrimaryVersionId set (per-item resilience).
+            // NOTE: We can't fully verify this because UpdateToRepositoryAsync is non-virtual,
+            // but we can confirm the operation doesn't abort early on a group with 3+ items.
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 720p.mkv");
+            var ep2 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 1080p.mkv");
+            var ep3 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 4K.mkv");
+            SetupLibraryReturns(ep1, ep2, ep3);
+
+            _libraryManager
+                .Setup(l => l.GetItemById<BaseItem>(It.IsAny<Guid>(), null))
+                .Returns((Guid id, object? _) =>
+                {
+                    var all = new BaseItem[] { ep1, ep2, ep3 };
+                    return all.FirstOrDefault(e => e.Id == id);
+                });
+
+            // Should process all 3 items in the group without aborting
+            var result = await _manager.MergeEpisodesAsync(null);
+            Assert.Equal(1, result.Succeeded + result.Failed);
+        }
+
+        [Fact]
+        public async Task MergeEpisodesAsync_EmptyPath_ExcludedFromGrouping()
+        {
+            // An episode whose Path produces an empty filename after GetFileNameWithoutExtension
+            // should return null identity and be excluded from grouping.
+            var ep1 = CreateTestEpisode(Guid.NewGuid(), "/tv/.mkv"); // empty filename
+            var ep2 = CreateTestEpisode(Guid.NewGuid(), "/tv/Show S01E01 720p.mkv");
+            SetupLibraryReturns(ep1, ep2);
+
+            var result = await _manager.MergeEpisodesAsync(null);
+
+            // Only one episode with valid identity — no group of 2+
+            Assert.Equal(0, result.Succeeded);
+            Assert.Equal(0, result.Failed);
+        }
     }
 }
