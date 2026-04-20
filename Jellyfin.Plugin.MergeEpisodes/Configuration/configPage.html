@@ -24,15 +24,6 @@
                         </p>
                     </div>
 
-                    <!-- ── Options Card ── -->
-                    <div class="me-card">
-                        <h3 class="me-card-title">&#9881; Options</h3>
-                        <label class="me-option-row">
-                            <input is="emby-checkbox" type="checkbox" id="chkAutoMerge" />
-                            <span>Automatically merge episodes after library scans (runs every 24 hours)</span>
-                        </label>
-                    </div>
-
                     <!-- ── Excluded Paths Card ── -->
                     <div class="me-card">
                         <h3 class="me-card-title">&#128274; Excluded Library Paths</h3>
@@ -40,6 +31,15 @@
                         <div id="divLocations" class="paperList checkboxList checkboxList-paperList">
                             <span class="me-empty-hint">Loading library paths&hellip;</span>
                         </div>
+                    </div>
+
+                    <!-- ── Options Card ── -->
+                    <div class="me-card">
+                        <h3 class="me-card-title">&#9881; Options</h3>
+                        <label class="me-option-row">
+                            <input is="emby-checkbox" type="checkbox" id="chkAutoMerge" />
+                            <span>Automatically merge episodes after library scans (runs every 24 hours)</span>
+                        </label>
                     </div>
 
                     <!-- ── Save ── -->
@@ -274,7 +274,7 @@
         </style>
 
         <script type="text/javascript">
-            var pluginId = "eb5d7894-8eef-4b36-aa6f-5d124e828ce1";
+            var pluginId = "c5315368-51cd-4efd-b930-a9bef8a9e44f";
             var isRunning = false;
             var elapsedTimer = null;
             var operationStart = null;
@@ -467,7 +467,8 @@
                 if (!hasLocations) {
                     html = '<span class="me-empty-hint">No library paths found. Add libraries in Jellyfin Dashboard first.</span>';
                 }
-                document.querySelector('#divLocations').innerHTML = html;
+                var page = $.mobile ? $.mobile.activePage : $(document);
+                $('#divLocations', page).html(html).trigger('create');
             }
 
             function getFolderHtml(currentConfig, virtualFolder, index) {
