@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.MergeEpisodes.Configuration
@@ -10,18 +9,13 @@ namespace Jellyfin.Plugin.MergeEpisodes.Configuration
     public class PluginConfiguration : BasePluginConfiguration
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="PluginConfiguration"/> class.
-        /// </summary>
-        public PluginConfiguration()
-        {
-            LocationsIncluded = new List<string>();
-        }
-
-        /// <summary>
         /// Gets or sets the library paths included for merging.
         /// An empty list means nothing is included (user must select paths after install).
         /// </summary>
-        [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Jellyfin XML serializer requires a setter for deserialization.")]
-        public IList<string> LocationsIncluded { get; set; }
+#pragma warning disable CA2227 // Collection properties should be read only — Jellyfin XML serializer requires a setter
+#pragma warning disable CA1002 // Do not expose generic lists — Jellyfin XML serializer requires concrete List<T>
+        public List<string> LocationsIncluded { get; set; } = [];
+#pragma warning restore CA1002
+#pragma warning restore CA2227
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Jellyfin.Plugin.MergeEpisodes.Configuration;
 
 namespace Jellyfin.Plugin.MergeEpisodes
@@ -18,6 +19,6 @@ namespace Jellyfin.Plugin.MergeEpisodes
         /// Gets the library locations included for merging.
         /// An empty list means nothing is included (user must select paths).
         /// </summary>
-        public System.Collections.Generic.IList<string> LocationsIncluded => Config.LocationsIncluded;
+        public IList<string> LocationsIncluded => Config.LocationsIncluded;
     }
 }
