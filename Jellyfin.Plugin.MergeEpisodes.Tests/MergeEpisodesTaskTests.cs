@@ -1,16 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // MergeEpisodesTaskTests.cs
 // ═══════════════════════════════════════════════════════════════════════════════
-// Tests for the MergeEpisodesTask scheduled task, which runs automatically
-// on a 24-hour interval when the "Auto Merge After Library Scan" config option
-// is enabled.
+// Tests for the MergeEpisodesTask scheduled task, available in Jellyfin's
+// Scheduled Tasks UI for manual execution.
 //
 // Key behaviors tested:
-//   1. Task skips execution entirely when AutoMergeAfterLibraryScan is disabled
-//   2. Task calls MergeEpisodesAsync when flag is enabled
-//   3. Task reports progress correctly (100% on skip, delegates during execution)
-//   4. Task metadata (Name, Key, Description, Category) is correct
-//   5. Default trigger is a 24-hour interval
+//   1. Task calls MergeEpisodesAsync and forwards progress
+//   2. Task metadata (Name, Key, Description, Category) is correct
+//   3. No default triggers (manual-only)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 using System;
@@ -29,21 +26,18 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
 {
     /// <summary>
     /// Tests for <see cref="MergeEpisodesTask"/>, the scheduled task that
-    /// automatically merges duplicate episodes after library scans.
-    /// Verifies the task correctly respects the AutoMergeAfterLibraryScan flag.
+    /// merges duplicate episodes. Available for manual execution in Jellyfin's dashboard.
     /// </summary>
     public class MergeEpisodesTaskTests
     {
         private readonly Mock<ILogger<MergeEpisodesTask>> _logger;
         private readonly Mock<IEpisodeMergeService> _mergeService;
-        private readonly ConfigurationService _configService;
 
         public MergeEpisodesTaskTests()
         {
             EnsurePluginInstance();
             _logger = new Mock<ILogger<MergeEpisodesTask>>();
             _mergeService = new Mock<IEpisodeMergeService>();
-            _configService = new ConfigurationService();
         }
 
         private static void EnsurePluginInstance()
@@ -67,96 +61,34 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             _ = new Plugin(appPaths.Object, xmlSerializer.Object);
         }
 
-        // ── Flag Checking (Auto-Merge Disabled) ─────────────────────────────────
+        // ── Execution ───────────────────────────────────────────────────────────
 
         /// <summary>
-        /// When AutoMergeAfterLibraryScan is disabled (default), the task should
-        /// skip entirely and NEVER call MergeEpisodesAsync. This prevents unwanted
-        /// automatic merging for users who haven't opted in.
+        /// Task should always call MergeEpisodesAsync when executed.
         /// </summary>
         [Fact]
-        public async Task ExecuteAsync_FlagDisabled_SkipsMerge()
+        public async Task ExecuteAsync_CallsMerge()
         {
-            // Arrange: ensure flag is OFF (the default state)
-            Plugin.Instance!.Configuration.AutoMergeAfterLibraryScan = false;
-            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object, _configService);
-            var progress = new Progress<double>();
-
-            // Act
-            await task.ExecuteAsync(progress, CancellationToken.None);
-
-            // Assert: MergeEpisodesAsync was never called
-            _mergeService.Verify(
-                s => s.MergeEpisodesAsync(It.IsAny<IProgress<double>?>()),
-                Times.Never,
-                "MergeEpisodesAsync should NOT be called when the auto-merge flag is disabled");
-        }
-
-        /// <summary>
-        /// When the flag is disabled and the task skips, it should still report
-        /// 100% progress so the Jellyfin UI doesn't show it as "stuck".
-        /// </summary>
-        [Fact]
-        public async Task ExecuteAsync_FlagDisabled_ReportsProgress100()
-        {
-            // Arrange
-            Plugin.Instance!.Configuration.AutoMergeAfterLibraryScan = false;
-            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object, _configService);
-            var progressValues = new List<double>();
-            var progress = new Progress<double>(v => progressValues.Add(v));
-
-            // Act
-            await task.ExecuteAsync(progress, CancellationToken.None);
-
-            // Allow progress callback to fire (it's async)
-            await Task.Delay(50);
-
-            // Assert: should have reported 100%
-            Assert.Contains(100.0, progressValues);
-        }
-
-        // ── Flag Checking (Auto-Merge Enabled) ──────────────────────────────────
-
-        /// <summary>
-        /// When AutoMergeAfterLibraryScan is enabled, the task should invoke
-        /// MergeEpisodesAsync to perform the actual merge operation.
-        /// </summary>
-        [Fact]
-        public async Task ExecuteAsync_FlagEnabled_CallsMerge()
-        {
-            // Arrange: enable the flag
-            Plugin.Instance!.Configuration.AutoMergeAfterLibraryScan = true;
-            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object, _configService);
+            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object);
 
             _mergeService
                 .Setup(s => s.MergeEpisodesAsync(It.IsAny<IProgress<double>?>()))
                 .ReturnsAsync(new OperationResult(3, 0, new List<string>().AsReadOnly()));
 
-            var progress = new Progress<double>();
+            await task.ExecuteAsync(new Progress<double>(), CancellationToken.None);
 
-            // Act
-            await task.ExecuteAsync(progress, CancellationToken.None);
-
-            // Assert: MergeEpisodesAsync was called exactly once
             _mergeService.Verify(
                 s => s.MergeEpisodesAsync(It.IsAny<IProgress<double>?>()),
-                Times.Once,
-                "MergeEpisodesAsync should be called exactly once when the auto-merge flag is enabled");
-
-            // Cleanup
-            Plugin.Instance.Configuration.AutoMergeAfterLibraryScan = false;
+                Times.Once);
         }
 
         /// <summary>
-        /// Verifies that the progress instance is passed through to MergeEpisodesAsync
-        /// so users can see real-time progress in the Jellyfin dashboard.
+        /// Verifies that the progress instance is passed through to MergeEpisodesAsync.
         /// </summary>
         [Fact]
-        public async Task ExecuteAsync_FlagEnabled_PassesProgressToService()
+        public async Task ExecuteAsync_PassesProgressToService()
         {
-            // Arrange
-            Plugin.Instance!.Configuration.AutoMergeAfterLibraryScan = true;
-            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object, _configService);
+            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object);
 
             IProgress<double>? capturedProgress = null;
             _mergeService
@@ -165,15 +97,9 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
                 .ReturnsAsync(new OperationResult(0, 0, new List<string>().AsReadOnly()));
 
             var progress = new Progress<double>();
-
-            // Act
             await task.ExecuteAsync(progress, CancellationToken.None);
 
-            // Assert: the progress instance was forwarded
             Assert.NotNull(capturedProgress);
-
-            // Cleanup
-            Plugin.Instance.Configuration.AutoMergeAfterLibraryScan = false;
         }
 
         // ── Task Metadata ───────────────────────────────────────────────────────
@@ -184,7 +110,7 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         [Fact]
         public void TaskMetadata_HasCorrectValues()
         {
-            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object, _configService);
+            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object);
 
             Assert.Equal("Merge All Episodes", task.Name);
             Assert.Equal("MergeEpisodesTask", task.Key);
@@ -195,57 +121,17 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
         // ── Default Triggers ────────────────────────────────────────────────────
 
         /// <summary>
-        /// Verifies the task has a default 24-hour interval trigger,
-        /// so it runs periodically after library scans complete.
+        /// Task has no default triggers — it's manual-only.
+        /// Users can add custom triggers via the Jellyfin dashboard.
         /// </summary>
         [Fact]
-        public void GetDefaultTriggers_Returns24HourInterval()
+        public void GetDefaultTriggers_ReturnsEmpty()
         {
-            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object, _configService);
+            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object);
 
             var triggers = task.GetDefaultTriggers().ToList();
 
-            // Should have exactly one trigger
-            Assert.Single(triggers);
-
-            // The trigger should be an interval trigger with 24-hour period
-            var trigger = triggers[0];
-            Assert.Equal(TaskTriggerInfoType.IntervalTrigger, trigger.Type);
-            Assert.Equal(TimeSpan.FromHours(24).Ticks, trigger.IntervalTicks);
-        }
-
-        // ── Edge Cases ──────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Verifies that if the flag changes between task creation and execution,
-        /// the task uses the current value at execution time (not cached).
-        /// This is critical because users may toggle the setting while the task
-        /// is already scheduled.
-        /// </summary>
-        [Fact]
-        public async Task ExecuteAsync_FlagChangedAfterConstruction_UsesCurrentValue()
-        {
-            // Arrange: start with flag disabled
-            Plugin.Instance!.Configuration.AutoMergeAfterLibraryScan = false;
-            var task = new MergeEpisodesTask(_logger.Object, _mergeService.Object, _configService);
-
-            _mergeService
-                .Setup(s => s.MergeEpisodesAsync(It.IsAny<IProgress<double>?>()))
-                .ReturnsAsync(new OperationResult(1, 0, new List<string>().AsReadOnly()));
-
-            // Enable the flag AFTER task was constructed
-            Plugin.Instance.Configuration.AutoMergeAfterLibraryScan = true;
-
-            // Act
-            await task.ExecuteAsync(new Progress<double>(), CancellationToken.None);
-
-            // Assert: should have called merge because flag is now true
-            _mergeService.Verify(
-                s => s.MergeEpisodesAsync(It.IsAny<IProgress<double>?>()),
-                Times.Once);
-
-            // Cleanup
-            Plugin.Instance.Configuration.AutoMergeAfterLibraryScan = false;
+            Assert.Empty(triggers);
         }
     }
 }

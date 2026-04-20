@@ -33,15 +33,6 @@
                         </div>
                     </div>
 
-                    <!-- ── Options Card ── -->
-                    <div class="me-card">
-                        <h3 class="me-card-title">&#9881; Options</h3>
-                        <label class="me-option-row">
-                            <input is="emby-checkbox" type="checkbox" id="chkAutoMerge" />
-                            <span>Automatically merge episodes after library scans (runs every 24 hours)</span>
-                        </label>
-                    </div>
-
                     <!-- ── Save ── -->
                     <div class="verticalSection" style="margin-top:.8em">
                         <button is="emby-button" type="button" class="raised button-submit block emby-button"
@@ -436,21 +427,33 @@
                 });
             }
 
-            ApiClient.getPluginConfiguration(pluginId).then(function (savedConfig) {
-                var config = savedConfig;
-
-                if (!config.LocationsExcluded) {
-                    config.LocationsExcluded = [];
-                }
-
-                document.querySelector('#chkAutoMerge').checked = !!config.AutoMergeAfterLibraryScan;
-
-                ApiClient.getVirtualFolders().then(function (virtualFolders) {
-                    loadVirtualFolders(config, virtualFolders);
-                });
+            // ── Page Initialization ──
+            // Wait for Jellyfin's page framework to signal readiness before
+            // touching the DOM or calling ApiClient. This avoids race conditions
+            // where the script runs before custom elements are registered.
+            $('.mergeEpisodesConfigurationPage').on('pageshow', function () {
+                var page = this;
+                loadPage(page);
             });
 
-            function loadVirtualFolders(config, virtualFolders) {
+            function loadPage(page) {
+                ApiClient.getPluginConfiguration(pluginId).then(function (savedConfig) {
+                    var config = savedConfig;
+
+                    if (!config.LocationsExcluded) {
+                        config.LocationsExcluded = [];
+                    }
+
+                    ApiClient.getVirtualFolders()
+                        loadVirtualFolders(page, config, virtualFolders);
+                    });
+                }).catch(function (err) {
+                    logEntry('Failed to load plugin configuration.', 'me-err');
+                    console.error('MergeEpisodes config load error:', err);
+                });
+            }
+
+            function loadVirtualFolders(page, config, virtualFolders) {
                 var html = '';
                 var hasLocations = false;
                 html += '<div data-role="controlgroup">';
@@ -467,7 +470,6 @@
                 if (!hasLocations) {
                     html = '<span class="me-empty-hint">No library paths found. Add libraries in Jellyfin Dashboard first.</span>';
                 }
-                var page = $.mobile ? $.mobile.activePage : $(document);
                 $('#divLocations', page).html(html).trigger('create');
             }
 
@@ -486,14 +488,12 @@
             }
 
             function save() {
-                var checkboxes = document.querySelectorAll('.chkLibrary:checked');
-                var folders = Array.from(checkboxes).map(function (el) {
-                    return el.getAttribute('data-location');
-                });
+                var folders = $('.chkLibrary:checked').map(function () {
+                    return this.getAttribute('data-location');
+                }).get();
 
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     config.LocationsExcluded = folders;
-                    config.AutoMergeAfterLibraryScan = document.querySelector('#chkAutoMerge').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (res) {
                         Dashboard.processPluginConfigurationUpdateResult(res);
                         logEntry('Configuration saved. ' + folders.length + ' path(s) excluded.', 'me-ok');

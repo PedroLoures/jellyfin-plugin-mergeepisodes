@@ -7,9 +7,8 @@
 // occur when the plugin hasn't been initialized (e.g., during testing or early boot).
 //
 // Key behaviors tested:
-//   1. AutoMergeAfterLibraryScan property reflects current config state
-//   2. LocationsExcluded property reflects current config state
-//   3. Defaults are returned when Plugin.Instance has a fresh configuration
+//   1. LocationsExcluded property reflects current config state
+//   2. Defaults are returned when Plugin.Instance has a fresh configuration
 // ═══════════════════════════════════════════════════════════════════════════════
 
 using System;
@@ -27,7 +26,6 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
     {
         /// <summary>
         /// Ensures Plugin.Instance is initialized for configuration access.
-        /// Uses the same technique as MergeEpisodesManagerTests.
         /// </summary>
         public ConfigurationServiceTests()
         {
@@ -53,62 +51,6 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
                 .Returns(new Configuration.PluginConfiguration());
 
             _ = new Plugin(appPaths.Object, xmlSerializer.Object);
-        }
-
-        // ── AutoMergeAfterLibraryScan ───────────────────────────────────────────
-
-        /// <summary>
-        /// Verifies that AutoMergeAfterLibraryScan defaults to false,
-        /// meaning the scheduled task won't run unless explicitly enabled.
-        /// </summary>
-        [Fact]
-        public void AutoMergeAfterLibraryScan_DefaultsToFalse()
-        {
-            // Arrange: fresh config should have the flag disabled
-            Plugin.Instance!.Configuration.AutoMergeAfterLibraryScan = false;
-            var service = new ConfigurationService();
-
-            // Act & Assert
-            Assert.False(service.AutoMergeAfterLibraryScan);
-        }
-
-        /// <summary>
-        /// Verifies that when the user enables auto-merge in the config page,
-        /// the ConfigurationService correctly reflects the new value.
-        /// </summary>
-        [Fact]
-        public void AutoMergeAfterLibraryScan_ReflectsEnabledState()
-        {
-            // Arrange: simulate user enabling the checkbox
-            Plugin.Instance!.Configuration.AutoMergeAfterLibraryScan = true;
-            var service = new ConfigurationService();
-
-            // Act & Assert
-            Assert.True(service.AutoMergeAfterLibraryScan);
-
-            // Cleanup
-            Plugin.Instance.Configuration.AutoMergeAfterLibraryScan = false;
-        }
-
-        /// <summary>
-        /// Verifies that changes to the config are reflected in real-time
-        /// (the service doesn't cache a stale value).
-        /// </summary>
-        [Fact]
-        public void AutoMergeAfterLibraryScan_ReflectsLiveChanges()
-        {
-            var service = new ConfigurationService();
-            Plugin.Instance!.Configuration.AutoMergeAfterLibraryScan = false;
-
-            // Initially false
-            Assert.False(service.AutoMergeAfterLibraryScan);
-
-            // Change to true — should be reflected immediately
-            Plugin.Instance.Configuration.AutoMergeAfterLibraryScan = true;
-            Assert.True(service.AutoMergeAfterLibraryScan);
-
-            // Cleanup
-            Plugin.Instance.Configuration.AutoMergeAfterLibraryScan = false;
         }
 
         // ── LocationsExcluded ───────────────────────────────────────────────────

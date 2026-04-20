@@ -20,10 +20,5 @@ namespace Jellyfin.Plugin.MergeEpisodes.Configuration
         /// Gets the library paths excluded from merging.
         /// </summary>
         public IList<string> LocationsExcluded { get; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether episodes should be automatically merged after library scans.
-        /// </summary>
-        public bool AutoMergeAfterLibraryScan { get; set; }
     }
 }

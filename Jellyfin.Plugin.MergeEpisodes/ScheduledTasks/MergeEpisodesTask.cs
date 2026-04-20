@@ -8,28 +8,25 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.MergeEpisodes.ScheduledTasks
 {
     /// <summary>
-    /// Scheduled task that automatically merges duplicate episodes in the library.
+    /// Scheduled task that merges duplicate episodes in the library.
+    /// Available in Jellyfin's Scheduled Tasks UI for manual execution.
     /// </summary>
     public class MergeEpisodesTask : IScheduledTask
     {
         private readonly ILogger<MergeEpisodesTask> _logger;
         private readonly IEpisodeMergeService _mergeService;
-        private readonly ConfigurationService _configService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MergeEpisodesTask"/> class.
         /// </summary>
         /// <param name="logger">Instance of the <see cref="ILogger{MergeEpisodesTask}"/> interface.</param>
         /// <param name="mergeService">Instance of the <see cref="IEpisodeMergeService"/> interface.</param>
-        /// <param name="configService">Instance of the <see cref="ConfigurationService"/> class.</param>
         public MergeEpisodesTask(
             ILogger<MergeEpisodesTask> logger,
-            IEpisodeMergeService mergeService,
-            ConfigurationService configService)
+            IEpisodeMergeService mergeService)
         {
             _logger = logger;
             _mergeService = mergeService;
-            _configService = configService;
         }
 
         /// <inheritdoc/>
@@ -47,13 +44,6 @@ namespace Jellyfin.Plugin.MergeEpisodes.ScheduledTasks
         /// <inheritdoc/>
         public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            if (!_configService.AutoMergeAfterLibraryScan)
-            {
-                _logger.LogDebug("Automatic merge after library scan is disabled, skipping");
-                progress.Report(100);
-                return;
-            }
-
             _logger.LogInformation("Starting scheduled merge episodes task");
 
             var result = await _mergeService.MergeEpisodesAsync(progress).ConfigureAwait(false);
@@ -67,8 +57,9 @@ namespace Jellyfin.Plugin.MergeEpisodes.ScheduledTasks
         /// <inheritdoc/>
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
-            // Run after library scan completes
-            return [new TaskTriggerInfo { Type = TaskTriggerInfoType.IntervalTrigger, IntervalTicks = TimeSpan.FromHours(24).Ticks }];
+            // No automatic triggers. Users can run this manually from the Scheduled Tasks UI
+            // or add custom triggers via the Jellyfin dashboard.
+            return [];
         }
     }
 }

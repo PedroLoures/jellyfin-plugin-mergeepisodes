@@ -15,11 +15,6 @@ namespace Jellyfin.Plugin.MergeEpisodes
         private PluginConfiguration Config => Plugin.Instance?.Configuration ?? DefaultConfig;
 
         /// <summary>
-        /// Gets a value indicating whether automatic merging after library scans is enabled.
-        /// </summary>
-        public bool AutoMergeAfterLibraryScan => Config.AutoMergeAfterLibraryScan;
-
-        /// <summary>
         /// Gets the library locations excluded from merging.
         /// </summary>
         public System.Collections.Generic.IList<string> LocationsExcluded => Config.LocationsExcluded;
