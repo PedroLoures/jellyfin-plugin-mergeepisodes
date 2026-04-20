@@ -74,23 +74,21 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
 
           # Collect recent commit messages for changelog
-          CHANGELOG=$(git log --pretty=format:"%s" -10 | jq -R . | jq -s . | jq -c .)
+          CHANGELOG=$(git log --pretty=format:"%s" -10 | paste -sd ', ' -)
 
-          cat > meta.json <<EOF
-          {
-            "category": "General",
-            "changelog": $CHANGELOG,
-            "description": "Jellyfin Merge Episodes plugin is a plugin that automatically groups every repeated episode\n",
-            "guid": "c5315368-51cd-4efd-b930-a9bef8a9e44f",
-            "imageUrl": "https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/main/resources/MergeEpisodes/ai-thumb2.png",
-            "name": "Merge Episodes",
-            "overview": "Automatically merge repeated episodes. Rewritten based on danielapov Merge Versions for 10.11.0.1",
-            "owner": "${{ github.repository_owner }}",
-            "targetAbi": "${{ steps.version.outputs.abi }}",
-            "timestamp": "$TIMESTAMP",
-            "version": "$VERSION"
-          }
-          EOF
+          jq -n \
+            --arg changelog "$CHANGELOG" \
+            --arg description "Jellyfin Merge Episodes plugin is a plugin that automatically groups every repeated episode\n" \
+            --arg guid "c5315368-51cd-4efd-b930-a9bef8a9e44f" \
+            --arg imageUrl "https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/main/resources/MergeEpisodes/ai-thumb2.png" \
+            --arg name "Merge Episodes" \
+            --arg overview "Automatically merge repeated episodes. Rewritten based on danielapov Merge Versions for 10.11.0.1" \
+            --arg owner "${{ github.repository_owner }}" \
+            --arg targetAbi "${{ steps.version.outputs.abi }}" \
+            --arg timestamp "$TIMESTAMP" \
+            --arg version "$VERSION" \
+            '{category: "General", changelog: $changelog, description: $description, guid: $guid, imageUrl: $imageUrl, name: $name, overview: $overview, owner: $owner, targetAbi: $targetAbi, timestamp: $timestamp, version: $version}' \
+            > meta.json
 
           echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
           cat meta.json
@@ -145,11 +143,11 @@ jobs:
           SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/plugin-${VERSION}.zip"
 
           # Collect recent commit messages for changelog
-          CHANGELOG=$(git log --pretty=format:"%s" -10 | jq -R . | jq -s . | jq -c .)
+          CHANGELOG=$(git log --pretty=format:"%s" -10 | paste -sd ', ' -)
 
           NEW_VERSION_ENTRY=$(jq -n \
             --arg version    "$VERSION" \
-            --argjson changelog "$CHANGELOG" \
+            --arg changelog "$CHANGELOG" \
             --arg targetAbi  "${{ steps.version.outputs.abi }}" \
             --arg sourceUrl  "$SOURCE_URL" \
             --arg checksum   "$CHECKSUM" \
