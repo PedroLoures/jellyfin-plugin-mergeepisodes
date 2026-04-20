@@ -18,13 +18,27 @@ jobs:
         with:
           ref: master
 
-      # ── 2. Read version from Directory.Build.props ─────────────────────────
-      - name: Read version
+      # ── 2. Read & bump version ─────────────────────────────────────────────
+      # CSPROJ_PATH: path to your plugin's .csproj file
+      # MANUAL_VERSION: change this manually whenever you want to bump Z
+      - name: Bump version
         id: version
+        env:
+          CSPROJ_PATH: Jellyfin.Plugin.MergeEpisodes/Jellyfin.Plugin.MergeEpisodes.csproj
+          MANUAL_VERSION: 0   # ← change this manually when you want to bump Z
         run: |
-          VERSION=$(grep -oP '(?<=<AssemblyVersion>)[^<]+' Directory.Build.props)
-          echo "Found version: $VERSION"
+          # Read X.Y from Jellyfin.Controller version in .csproj
+          ABI=$(grep -oP '(?<=Jellyfin\.Controller" Version=")[0-9]+\.[0-9]+' "$CSPROJ_PATH")
+          BUILD=${{ github.run_number }}
+          VERSION="$ABI.$MANUAL_VERSION.$BUILD"
+          echo "New version: $VERSION"
+
+          sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|" Directory.Build.props
+          sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>$VERSION</AssemblyVersion>|" Directory.Build.props
+          sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>$VERSION</FileVersion>|" Directory.Build.props
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "abi=$ABI.0.0" >> $GITHUB_OUTPUT
 
       # ── 3. Setup .NET ──────────────────────────────────────────────────────
       - name: Setup .NET
@@ -51,14 +65,11 @@ jobs:
           echo "dll_path=$DLL_PATH" >> $GITHUB_OUTPUT
 
       # ── 6. Generate meta.json ──────────────────────────────────────────────
-      # Edit the static fields (guid, name, description, etc.) to match your plugin.
-      # version, timestamp, and checksum are filled in automatically.
       - name: Generate meta.json
         id: meta
         run: |
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           VERSION="${{ steps.version.outputs.version }}"
-          CHECKSUM=$(md5sum "${{ steps.dll.outputs.dll_path }}" | awk '{print toupper($1)}')
 
           # Collect recent commit messages for changelog
           CHANGELOG=$(git log --pretty=format:"%s" -10 \
@@ -74,18 +85,18 @@ jobs:
             "name": "Merge Episodes",
             "overview": "Automatically merge repeated episodes. Rewritten based on danielapov Merge Versions for 10.11.0.1",
             "owner": "${{ github.repository_owner }}",
-            "targetAbi": "10.11.0.0",
+            "targetAbi": "${{ steps.version.outputs.abi }}",
             "timestamp": "$TIMESTAMP",
             "version": "$VERSION"
           }
           EOF
 
-          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
           echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
           cat meta.json
 
       # ── 7. Package .dll + meta.json into a .zip ────────────────────────────
       - name: Package zip
+        id: zip
         run: |
           mkdir -p dist
           cp "${{ steps.dll.outputs.dll_path }}" dist/
@@ -94,6 +105,9 @@ jobs:
           ZIP_NAME="plugin-${{ steps.version.outputs.version }}.zip"
           zip -j "../$ZIP_NAME" ./*
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+          cd ..
+          CHECKSUM=$(md5sum "$ZIP_NAME" | awk '{print toupper($1)}')
+          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
 
       # ── 8. Create GitHub Release and upload the zip ────────────────────────
       - name: Create GitHub Release
@@ -123,7 +137,7 @@ jobs:
           MANIFEST="manifest-repo/manifest.json"
           VERSION="${{ steps.version.outputs.version }}"
           TIMESTAMP="${{ steps.meta.outputs.timestamp }}"
-          CHECKSUM="${{ steps.meta.outputs.checksum }}"
+          CHECKSUM="${{ steps.zip.outputs.checksum }}"
           PLUGIN_GUID="c5315368-51cd-4efd-b930-a9bef8a9e44f"
 
           # Build the source URL pointing at the release asset we just uploaded
@@ -136,7 +150,7 @@ jobs:
           NEW_VERSION_ENTRY=$(jq -n \
             --arg version    "$VERSION" \
             --argjson changelog "$CHANGELOG" \
-            --arg targetAbi  "10.11.0.0" \
+            --arg targetAbi  "${{ steps.version.outputs.abi }}" \
             --arg sourceUrl  "$SOURCE_URL" \
             --arg checksum   "$CHECKSUM" \
             --arg timestamp  "$TIMESTAMP" \
@@ -159,7 +173,7 @@ jobs:
                 . + [{
                   "guid": $guid,
                   "name": "Merge Episodes",
-                  "description": "Jellyfin Merge Episodes plugin is a plugin that automatically groups every repeated episode\n",
+                  "description": "Merge Episodes is a plugin that automatically groups every repeated episode for Jellyfin\n",
                   "overview": "Automatically merge repeated episodes. Rewritten based on danielapov Merge Versions for 10.11.0.1",
                   "owner": "${{ github.repository_owner }}",
                   "imageUrl": "https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/main/resources/MergeEpisodes/ai-thumb2.png",
