@@ -72,13 +72,12 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
 
           # Collect recent commit messages for changelog
-          CHANGELOG=$(git log --pretty=format:"%s" -10 \
-            | jq -R . | jq -s . | jq -c .)
+          CHANGELOG=$(git log --pretty=format:"%s" -10 | jq -R . | jq -s . | jq -c . | jq -R .)
 
           cat > meta.json <<EOF
           {
             "category": "General",
-            "changelog": $CHANGELOG,
+            "changelog": "$CHANGELOG",
             "description": "Jellyfin Merge Episodes plugin is a plugin that automatically groups every repeated episode\n",
             "guid": "c5315368-51cd-4efd-b930-a9bef8a9e44f",
             "imageUrl": "https://raw.githubusercontent.com/PedroLoures/JellyfinPluginManifest/main/resources/MergeEpisodes/ai-thumb2.png",
@@ -144,12 +143,11 @@ jobs:
           SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/plugin-${VERSION}.zip"
 
           # Collect recent commit messages for changelog
-          CHANGELOG=$(git log --pretty=format:"%s" -10 \
-            | jq -R . | jq -s . | jq -c . )
+          CHANGELOG=$(git log --pretty=format:"%s" -10 | jq -R . | jq -s . | jq -c . | jq -R .)
 
           NEW_VERSION_ENTRY=$(jq -n \
             --arg version    "$VERSION" \
-            --argjson changelog "$CHANGELOG" \
+            --arg changelog "$CHANGELOG" \
             --arg targetAbi  "${{ steps.version.outputs.abi }}" \
             --arg sourceUrl  "$SOURCE_URL" \
             --arg checksum   "$CHECKSUM" \

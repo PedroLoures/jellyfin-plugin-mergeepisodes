@@ -4,6 +4,8 @@ VisualStudioVersion = 18.5.11709.299
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jellyfin.Plugin.MergeEpisodes", "Jellyfin.Plugin.MergeEpisodes\Jellyfin.Plugin.MergeEpisodes.csproj", "{D921B930-CF91-406F-ACBC-08914DCD0D34}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jellyfin.Plugin.MergeEpisodes.Tests", "Jellyfin.Plugin.MergeEpisodes.Tests\Jellyfin.Plugin.MergeEpisodes.Tests.csproj", "{E1030341-2D27-755D-D2EF-BD5DC26407DA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,8 +28,23 @@ Global
 		{D921B930-CF91-406F-ACBC-08914DCD0D34}.Release|x64.Build.0 = Release|Any CPU
 		{D921B930-CF91-406F-ACBC-08914DCD0D34}.Release|x86.ActiveCfg = Release|Any CPU
 		{D921B930-CF91-406F-ACBC-08914DCD0D34}.Release|x86.Build.0 = Release|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Debug|x64.Build.0 = Debug|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Debug|x86.Build.0 = Debug|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Release|x64.ActiveCfg = Release|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Release|x64.Build.0 = Release|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Release|x86.ActiveCfg = Release|Any CPU
+		{E1030341-2D27-755D-D2EF-BD5DC26407DA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E2DE61CC-5547-4785-89FD-A0118F404602}
 	EndGlobalSection
 EndGlobal
