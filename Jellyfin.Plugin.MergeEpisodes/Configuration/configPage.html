@@ -27,7 +27,7 @@
                     <!-- ── Included Paths Card ── -->
                     <div class="me-card">
                         <h3 class="me-card-title">&#128194; Included Library Paths</h3>
-                        <p class="me-card-desc">Only checked paths will be processed during merge and split operations. All paths are included by default.</p>
+                        <p class="me-card-desc">Only checked paths will be processed during merge and split operations. Select the libraries you want to include.</p>
                         <div style="margin-bottom:.6em">
                             <button is="emby-button" type="button" class="raised emby-button me-btn-secondary" style="font-size:.85em; padding:.3em .8em" onclick="selectAllPaths()">
                                 <span>&#9745; Select All</span>
@@ -44,7 +44,7 @@
                     <!-- ── Save ── -->
                     <div class="verticalSection" style="margin-top:.8em">
                         <button is="emby-button" type="button" class="raised button-submit block emby-button"
-                                id="btn-save" onclick=save()>
+                                id="btn-save" onclick="save()">
                             <span>&#128190; Save Configuration</span>
                         </button>
                     </div>
@@ -55,21 +55,21 @@
                         <p class="me-card-desc">Run merge or split operations manually. Only one operation can run at a time.</p>
                         <div class="me-btn-row">
                             <button is="emby-button" type="button" class="raised emby-button me-btn-primary"
-                                    id="btn-merge-episodes" onclick=mergeEpisodes()>
+                                    id="btn-merge-episodes" onclick="mergeEpisodes()">
                                 <span>&#128279; Merge All Episodes</span>
                             </button>
                             <button is="emby-button" type="button" class="raised emby-button me-btn-secondary"
-                                    id="btn-split-episodes" onclick=splitEpisodes()>
+                                    id="btn-split-episodes" onclick="splitEpisodes()">
                                 <span>&#9986; Split All Episodes</span>
                             </button>
                             <button is="emby-button" type="button" class="raised emby-button me-btn-stop"
-                                    id="btn-stop" onclick=stopOperation() disabled>
+                                    id="btn-stop" onclick="stopOperation()" disabled>
                                 <span>&#9724; Stop</span>
                             </button>
                         </div>
                         <div style="margin-top:.8em">
                             <button is="emby-button" type="button" class="raised block emby-button me-btn-danger"
-                                    id="btn-split-all" onclick=splitAllEpisodes()>
+                                    id="btn-split-all" onclick="splitAllEpisodes()">
                                 <span>&#9888; Split Everything &mdash; Fix Old Plugin Issues</span>
                             </button>
                         </div>
@@ -99,7 +99,7 @@
                         <div style="display:flex; align-items:center; justify-content:space-between">
                             <h3 class="me-card-title" style="margin:0">&#128220; Activity Log</h3>
                             <button is="emby-button" type="button" class="raised emby-button me-btn-clear"
-                                    id="btn-clear-log" onclick=clearLog()>
+                                    id="btn-clear-log" onclick="clearLog()">
                                 <span>Clear</span>
                             </button>
                         </div>
@@ -452,7 +452,7 @@
                         config.LocationsIncluded = [];
                     }
 
-                    ApiClient.getVirtualFolders()
+                    ApiClient.getVirtualFolders().then(function (virtualFolders) {
                         loadVirtualFolders(page, config, virtualFolders);
                     });
                 }).catch(function (err) {

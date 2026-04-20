@@ -70,14 +70,15 @@ namespace Jellyfin.Plugin.MergeEpisodes.Tests
             // IServerApplicationPaths + IXmlSerializer. We'll use a helper to bypass this.
             EnsurePluginInstance();
 
-            // Configure /tv as an included library path so episodes are eligible.
-            // Empty list = nothing included, so tests need at least one path.
+            // Configure /tv as an included library path so test episodes are eligible.
+            // This is just test data — production code works with any path (/anime, /cartoon, etc.).
+            // Empty list = nothing included, so tests need at least one matching path.
             Plugin.Instance!.Configuration.LocationsIncluded.Clear();
             Plugin.Instance.Configuration.LocationsIncluded.Add("/tv");
 
-            // Default: any path starting with /tv is considered inside the /tv library.
+            // Simulate IFileSystem.ContainsSubPath: any child path under /tv is considered a match.
             _fileSystem
-                .Setup(fs => fs.ContainsSubPath("/tv", It.Is<string>(p => p != null && p.StartsWith("/tv", StringComparison.Ordinal))))
+                .Setup(fs => fs.ContainsSubPath("/tv", It.Is<string>(p => p != null && p.StartsWith("/tv/", StringComparison.Ordinal))))
                 .Returns(true);
 
             _manager = new MergeEpisodesManager(
