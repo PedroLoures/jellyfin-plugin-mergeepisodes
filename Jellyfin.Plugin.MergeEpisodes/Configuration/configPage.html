@@ -406,8 +406,14 @@
                         }
                     })
                     .catch(function () {
+                        // Always reset UI state, even if error occurs before setRunning(false)
+                        try {
+                            setRunning(false);
+                        } catch (e) {
+                            var panel = document.querySelector('#progress-panel');
+                            if (panel) panel.style.display = 'none';
+                        }
                         var elapsed = stopElapsedTimer();
-                        setRunning(false);
                         logEntry(operationName + ' failed with an unexpected error. (' + elapsed + ')', 'me-err');
                         Dashboard.alert({ message: "Unexpected error occurred!" });
                     });
@@ -461,6 +467,10 @@
 
                     ApiClient.getVirtualFolders().then(function (virtualFolders) {
                         loadVirtualFolders(page, config, virtualFolders);
+                    }).catch(function (err) {
+                        document.querySelector('#divLocations').innerHTML = '<span class="me-empty-hint">Failed to load library paths.</span>';
+                        logEntry('Failed to load library paths.', 'me-err');
+                        console.error('MergeEpisodes virtual folders error:', err);
                     });
                 }).catch(function (err) {
                     logEntry('Failed to load plugin configuration.', 'me-err');
@@ -499,7 +509,8 @@
                     var checkedAttribute = isChecked ? 'checked="checked"' : '';
                     var safeLocation = location.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     var safeName = virtualFolder.Name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    html += '<label><input is="emby-checkbox" class="chkLibrary" type="checkbox" data-mini="true" id="' + id + '" name="' + id + '" data-location="' + safeLocation + '" ' + checkedAttribute + ' /><span>' + safeName + ' &mdash; <code style="opacity:.7; font-size:.9em">' + safeLocation + '</code></span></label>';
+                    var title = 'Library: ' + virtualFolder.Name + ' | Path: ' + location;
+                    html += '<label><input is="emby-checkbox" class="chkLibrary" type="checkbox" data-mini="true" id="' + id + '" name="' + id + '" data-location="' + safeLocation + '" title="' + title.replace(/"/g, '&quot;') + '" ' + checkedAttribute + ' /><span>' + safeName + ' &mdash; <code style="opacity:.7; font-size:.9em">' + safeLocation + '</code></span></label>';
                 }
                 return html;
             }
@@ -522,7 +533,15 @@
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (res) {
                         Dashboard.processPluginConfigurationUpdateResult(res);
                         logEntry('Configuration saved. ' + folders.length + ' path(s) included.', 'me-ok');
+                    }).catch(function (err) {
+                        logEntry('Failed to save configuration.', 'me-err');
+                        console.error('MergeEpisodes config save error:', err);
+                        Dashboard.alert({ message: "Failed to save plugin configuration." });
                     });
+                }).catch(function (err) {
+                    logEntry('Failed to load configuration for saving.', 'me-err');
+                    console.error('MergeEpisodes config load error:', err);
+                    Dashboard.alert({ message: "Failed to load plugin configuration." });
                 });
             }
         </script>
