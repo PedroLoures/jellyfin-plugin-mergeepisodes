@@ -14,69 +14,79 @@
                     <div class="sectionTitleContainer flex align-items-center">
                         <h2 class="sectionTitle">Merge Episodes</h2>
                         <a is="emby-linkbutton" class="raised button-alt headerHelpButton emby-button" target="_blank"
-                           href="https://github.com/PedroLoures/jellyfin-plugin-mergeepisodes">Help</a>
+                           href="https://github.com/PedroLoures/jellyfin-plugin-mergeepisodes"
+                           style="margin-left:.8em">Help</a>
                     </div>
                     <div class="verticalSection">
-                        <p>
+                        <p style="opacity:.85; line-height:1.5">
                             This plugin merges repeated episodes that share the same
-                            SxxExx identifier into a single entry with multiple versions.
+                            <strong>SXXEYY</strong> identifier into a single entry with multiple versions.
                         </p>
                     </div>
 
-                    <div class="verticalSection">
-                        <h3 class="checkboxListLabel">Options:</h3>
-                        <label>
+                    <!-- ── Options Card ── -->
+                    <div class="me-card">
+                        <h3 class="me-card-title">&#9881; Options</h3>
+                        <label class="me-option-row">
                             <input is="emby-checkbox" type="checkbox" id="chkAutoMerge" />
                             <span>Automatically merge episodes after library scans (runs every 24 hours)</span>
                         </label>
                     </div>
 
-                    <div class="verticalSection">
-                        <h3 class="checkboxListLabel">Select paths to exclude from merging:</h3>
+                    <!-- ── Excluded Paths Card ── -->
+                    <div class="me-card">
+                        <h3 class="me-card-title">&#128274; Excluded Library Paths</h3>
+                        <p class="me-card-desc">Episodes in checked paths will be skipped during merge and split operations.</p>
                         <div id="divLocations" class="paperList checkboxList checkboxList-paperList">
+                            <span class="me-empty-hint">Loading library paths&hellip;</span>
                         </div>
                     </div>
 
-                    <div class="verticalSection">
+                    <!-- ── Save ── -->
+                    <div class="verticalSection" style="margin-top:.8em">
                         <button is="emby-button" type="button" class="raised button-submit block emby-button"
                                 id="btn-save" onclick=save()>
-                            <span>Save</span>
+                            <span>&#128190; Save Configuration</span>
                         </button>
                     </div>
 
-                    <div class="verticalSection">
-                        <h3 class="sectionTitle">Operations</h3>
-                        <div style="display:flex; flex-wrap:wrap; gap:.5em; margin-bottom:.5em">
-                            <button is="emby-button" type="button" class="raised emby-button"
+                    <!-- ── Operations Card ── -->
+                    <div class="me-card" style="margin-top:1.5em">
+                        <h3 class="me-card-title">&#9654; Operations</h3>
+                        <p class="me-card-desc">Run merge or split operations manually. Only one operation can run at a time.</p>
+                        <div class="me-btn-row">
+                            <button is="emby-button" type="button" class="raised emby-button me-btn-primary"
                                     id="btn-merge-episodes" onclick=mergeEpisodes()>
-                                <span>Merge All Episodes</span>
+                                <span>&#128279; Merge All Episodes</span>
                             </button>
-                            <button is="emby-button" type="button" class="raised emby-button"
+                            <button is="emby-button" type="button" class="raised emby-button me-btn-secondary"
                                     id="btn-split-episodes" onclick=splitEpisodes()>
-                                <span>Split All Episodes</span>
+                                <span>&#9986; Split All Episodes</span>
                             </button>
-                            <button is="emby-button" type="button" class="raised emby-button"
-                                    id="btn-stop" onclick=stopOperation() disabled
-                                    style="background:#c25;color:#fff">
-                                <span>Stop</span>
+                            <button is="emby-button" type="button" class="raised emby-button me-btn-stop"
+                                    id="btn-stop" onclick=stopOperation() disabled>
+                                <span>&#9724; Stop</span>
                             </button>
                         </div>
-                        <button is="emby-button" type="button" class="raised block emby-button"
-                                id="btn-split-all" onclick=splitAllEpisodes()
-                                style="background:#d32f2f;color:#fff">
-                            <span>&#9888; Split Everything &mdash; Fix Old Plugin Issues</span>
-                        </button>
+                        <div style="margin-top:.8em">
+                            <button is="emby-button" type="button" class="raised block emby-button me-btn-danger"
+                                    id="btn-split-all" onclick=splitAllEpisodes()>
+                                <span>&#9888; Split Everything &mdash; Fix Old Plugin Issues</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div id="progress-panel" style="display:none; margin-top:1em; padding:1em; border:1px solid #555; border-radius:4px;">
+                    <!-- ── Progress Panel ── -->
+                    <div id="progress-panel" class="me-progress-panel" style="display:none">
                         <div style="display:flex; align-items:center; gap:.6em">
-                            <span id="progress-spinner" style="display:inline-block; width:1.1em; height:1.1em; border:2px solid rgba(255,255,255,.2); border-top-color:#00a4dc; border-radius:50%; animation:me-spin .8s linear infinite"></span>
+                            <span id="progress-spinner" class="me-spinner"></span>
                             <span id="progress-label" style="font-weight:600"></span>
                             <span id="progress-elapsed" style="margin-left:auto; opacity:.7; font-size:.9em"></span>
                         </div>
                     </div>
 
-                    <div id="operation-result" style="display:none; margin-top:1em; padding:1em; border-radius:4px;">
+                    <!-- ── Operation Result ── -->
+                    <div id="operation-result" style="display:none; margin-top:1em; padding:1em; border-radius:6px;">
                         <h3 id="result-title" style="margin:0 0 .4em 0"></h3>
                         <p id="result-summary" style="margin:0 0 .4em 0"></p>
                         <div id="result-failures" style="display:none">
@@ -85,17 +95,17 @@
                         </div>
                     </div>
 
-                    <div class="verticalSection" style="margin-top:1.5em">
+                    <!-- ── Activity Log Card ── -->
+                    <div class="me-card" style="margin-top:1.5em">
                         <div style="display:flex; align-items:center; justify-content:space-between">
-                            <h3 class="sectionTitle" style="margin:0">Activity Log</h3>
-                            <button is="emby-button" type="button" class="emby-button" id="btn-clear-log"
-                                    onclick=clearLog() style="font-size:.8em; padding:.2em .6em; opacity:.7">
-                                Clear
+                            <h3 class="me-card-title" style="margin:0">&#128220; Activity Log</h3>
+                            <button is="emby-button" type="button" class="raised emby-button me-btn-clear"
+                                    id="btn-clear-log" onclick=clearLog()>
+                                <span>Clear</span>
                             </button>
                         </div>
-                        <div id="activity-log"
-                             style="margin-top:.5em; padding:.6em; border:1px solid #333; border-radius:4px; max-height:14em; overflow-y:auto; font-family:monospace; font-size:.85em; background:rgba(0,0,0,.15)">
-                            <span style="opacity:.5">No activity yet.</span>
+                        <div id="activity-log" class="me-log-container">
+                            <span class="me-empty-hint">No activity yet.</span>
                         </div>
                     </div>
                 </form>
@@ -103,12 +113,123 @@
         </div>
 
         <style>
-            @keyframes me-spin {
-                to {
-                    transform: rotate(360deg);
-                }
+            /* ── Card Layout ── */
+            .me-card {
+                margin-top: 1.2em;
+                padding: 1.2em 1.4em;
+                border: 1px solid rgba(255,255,255,.08);
+                border-radius: 8px;
+                background: rgba(255,255,255,.03);
             }
 
+            .me-card-title {
+                margin: 0 0 .6em 0;
+                font-size: 1.1em;
+                font-weight: 600;
+                color: #00a4dc;
+            }
+
+            .me-card-desc {
+                margin: 0 0 .8em 0;
+                opacity: .65;
+                font-size: .9em;
+                line-height: 1.4;
+            }
+
+            .me-option-row {
+                display: flex;
+                align-items: center;
+                gap: .5em;
+            }
+
+            .me-empty-hint {
+                opacity: .45;
+                font-style: italic;
+            }
+
+            /* ── Buttons ── */
+            .me-btn-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: .5em;
+            }
+
+            .me-btn-primary {
+                background: #00a4dc !important;
+                color: #fff !important;
+            }
+
+            .me-btn-primary:hover {
+                background: #0090c4 !important;
+            }
+
+            .me-btn-secondary {
+                background: rgba(255,255,255,.1) !important;
+                color: #fff !important;
+                border: 1px solid rgba(255,255,255,.15) !important;
+            }
+
+            .me-btn-secondary:hover {
+                background: rgba(255,255,255,.18) !important;
+            }
+
+            .me-btn-stop {
+                background: #c25 !important;
+                color: #fff !important;
+            }
+
+            .me-btn-stop:disabled {
+                background: rgba(255,255,255,.08) !important;
+                color: rgba(255,255,255,.3) !important;
+            }
+
+            .me-btn-danger {
+                background: #d32f2f !important;
+                color: #fff !important;
+            }
+
+            .me-btn-danger:hover {
+                background: #b71c1c !important;
+            }
+
+            .me-btn-clear {
+                font-size: .8em !important;
+                padding: .3em .8em !important;
+                background: rgba(255,255,255,.08) !important;
+                color: #ccc !important;
+                border: 1px solid rgba(255,255,255,.12) !important;
+                border-radius: 4px !important;
+            }
+
+            .me-btn-clear:hover {
+                background: rgba(255,255,255,.15) !important;
+                color: #fff !important;
+            }
+
+            /* ── Progress ── */
+            .me-progress-panel {
+                margin-top: 1em;
+                padding: 1em 1.2em;
+                border: 1px solid #00a4dc;
+                border-radius: 6px;
+                background: rgba(0,164,220,.08);
+            }
+
+            .me-spinner {
+                display: inline-block;
+                width: 1.1em;
+                height: 1.1em;
+                border: 2px solid rgba(255,255,255,.15);
+                border-top-color: #00a4dc;
+                border-radius: 50%;
+                animation: me-spin .8s linear infinite;
+            }
+
+            @keyframes me-spin {
+                to { transform: rotate(360deg); }
+            }
+
+            /* ── Operation Result ── */
             #operation-result.me-success {
                 border: 1px solid #4caf50;
                 background: rgba(76,175,80,.1);
@@ -124,27 +245,32 @@
                 background: rgba(255,152,0,.1);
             }
 
+            /* ── Activity Log ── */
+            .me-log-container {
+                margin-top: .6em;
+                padding: .8em;
+                border: 1px solid rgba(255,255,255,.06);
+                border-radius: 6px;
+                max-height: 14em;
+                overflow-y: auto;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: .85em;
+                background: rgba(0,0,0,.2);
+            }
+
             #activity-log .me-log-entry {
-                padding: .15em 0;
+                padding: .2em 0;
                 border-bottom: 1px solid rgba(255,255,255,.04);
             }
 
             #activity-log .me-ts {
-                opacity: .5;
+                opacity: .45;
                 margin-right: .5em;
             }
 
-            #activity-log .me-ok {
-                color: #4caf50;
-            }
-
-            #activity-log .me-warn {
-                color: #ff9800;
-            }
-
-            #activity-log .me-err {
-                color: #f44336;
-            }
+            #activity-log .me-ok { color: #4caf50; }
+            #activity-log .me-warn { color: #ff9800; }
+            #activity-log .me-err { color: #f44336; }
         </style>
 
         <script type="text/javascript">
@@ -159,7 +285,7 @@
 
             function logEntry(message, cls) {
                 var log = document.querySelector('#activity-log');
-                if (log.querySelector('span')) {
+                if (log.querySelector('.me-empty-hint')) {
                     log.innerHTML = '';
                 }
                 var entry = document.createElement('div');
@@ -170,7 +296,7 @@
             }
 
             function clearLog() {
-                document.querySelector('#activity-log').innerHTML = '<span style="opacity:.5">No activity yet.</span>';
+                document.querySelector('#activity-log').innerHTML = '<span class="me-empty-hint">No activity yet.</span>';
             }
 
             function formatElapsed(ms) {
@@ -326,12 +452,21 @@
 
             function loadVirtualFolders(config, virtualFolders) {
                 var html = '';
+                var hasLocations = false;
                 html += '<div data-role="controlgroup">';
                 for (var i = 0, length = virtualFolders.length; i < length; i++) {
                     var virtualFolder = virtualFolders[i];
-                    html += getFolderHtml(config, virtualFolder, i);
+                    var folderHtml = getFolderHtml(config, virtualFolder, i);
+                    if (folderHtml) {
+                        hasLocations = true;
+                    }
+                    html += folderHtml;
                 }
                 html += '</div>';
+
+                if (!hasLocations) {
+                    html = '<span class="me-empty-hint">No library paths found. Add libraries in Jellyfin Dashboard first.</span>';
+                }
                 document.querySelector('#divLocations').innerHTML = html;
             }
 
@@ -344,7 +479,7 @@
                         return current.toLowerCase() === location.toLowerCase();
                     });
                     var checkedAttribute = isChecked ? 'checked="checked"' : '';
-                    html += '<label><input is="emby-checkbox" class="chkLibrary" type="checkbox" data-mini="true" id="' + id + '" name="' + id + '" data-location="' + location + '" ' + checkedAttribute + ' /><span>' + location + ' - ' + virtualFolder.Name + '</span></label>';
+                    html += '<label><input is="emby-checkbox" class="chkLibrary" type="checkbox" data-mini="true" id="' + id + '" name="' + id + '" data-location="' + location + '" ' + checkedAttribute + ' /><span>' + virtualFolder.Name + ' &mdash; <code style="opacity:.7; font-size:.9em">' + location + '</code></span></label>';
                 }
                 return html;
             }
